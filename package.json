@@ -4,7 +4,7 @@
   "version": "0.1.1",
   "private": true,
   "type": "module",
-  "description": "DeepSeek Harness 轻量 Windows 启动器。选版本启动 dsh web，共用 web profile，换版本不用重装插件。",
+  "description": "DeepSeek Harness 轻量 Windows 启动器。选一个版本，启动 dsh web。",
   "main": "start.js",
   "engines": {
     "node": ">=22.18.0"

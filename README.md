@@ -10,10 +10,9 @@
   <a href="https://github.com/yyh-001/dsh-launcher">Star</a>
 </p>
 
-DeepSeek Harness 轻量 Windows 启动器。选版本启动 dsh web，共用 web profile，换版本不用重装插件。
+DeepSeek Harness 轻量 Windows 启动器。选一个版本，启动 dsh web。
 
 - **选版本即用**：启动 / 停止 / 重启 / 更新 / 卸载
-- **共用 web profile**：一份 `DSH_HOME`，换版本不重装插件
 - **更新干净**：装最新版后删掉当前旧版，下拉框切到最新
 - **托盘常驻**：关网页不退出，界面走系统浏览器
 - **自带 Node / npm**：安装包含便携 `node.exe` 与 npm 10，镜像源 npmmirror
