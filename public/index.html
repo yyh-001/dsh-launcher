@@ -33,6 +33,20 @@
       padding: 18px 28px;
     }
     .brand { font-weight: 650; letter-spacing: 0.04em; font-size: 16px; }
+    .brand-block { display: flex; align-items: baseline; gap: 10px; }
+    .app-ver { color: var(--muted); font-size: 12px; }
+    .app-ver:empty { display: none; }
+    .self-update {
+      border: 0;
+      background: var(--accent);
+      color: #111;
+      font: 600 12px/1 inherit;
+      padding: 6px 12px;
+      border-radius: 999px;
+      cursor: pointer;
+    }
+    .self-update:hover { filter: brightness(0.92); }
+    .self-update[hidden] { display: none; }
     nav { display: flex; gap: 4px; background: #0c0c0c; padding: 4px; border-radius: 999px; border: 1px solid var(--line); }
     nav button {
       border: 0; background: transparent; color: var(--muted);
@@ -51,6 +65,7 @@
       padding: 24px;
     }
     .card.settings { width: min(560px, 100%); }
+    .card.settings .toggle:first-child { margin-top: 0; }
     .home-bar {
       display: flex;
       align-items: flex-end;
@@ -78,19 +93,7 @@
       background: #0c0c0c url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath fill='%238a8a8a' d='M0 0h12L6 8z'/%3E%3C/svg%3E") no-repeat right 14px center;
       padding: 12px 36px 12px 14px;
     }
-    select:focus, input[type=text]:focus { outline: 1px solid var(--accent); }
-    .path { display: flex; gap: 8px; }
-    .path input { flex: 1; min-width: 0; }
-    .path button {
-      flex: 0 0 auto;
-      border: 1px solid var(--line);
-      background: transparent;
-      color: var(--text);
-      padding: 0 14px;
-      border-radius: 12px;
-      cursor: pointer;
-      font: inherit;
-    }
+    select:focus { outline: 1px solid var(--accent); }
     .toggle {
       display: flex;
       align-items: center;
@@ -247,7 +250,11 @@
 </head>
 <body>
   <header>
-    <div class="brand">DSH启动器</div>
+    <div class="brand-block">
+      <div class="brand">DSH启动器</div>
+      <span class="app-ver" id="appVer">__APP_VERSION__</span>
+      <button type="button" class="self-update" id="selfUpdate" hidden>更新</button>
+    </div>
     <nav>
       <button class="active" data-tab="home">控制</button>
       <button data-tab="log">终端</button>
@@ -294,7 +301,7 @@
             </button>
           </div>
         </div>
-        <p class="hint" id="hint">共用 web profile，换版本不会重装插件。</p>
+        <p class="hint" id="hint">插件和数据在用户目录的 .dsh。</p>
         <div class="progress" id="progress" hidden>
           <div class="progress-bar" id="progress-bar"></div>
         </div>
@@ -306,12 +313,6 @@
     </div>
     <div id="page-settings" class="page">
       <div class="card settings">
-        <label for="dataDir">安装位置</label>
-        <div class="path">
-          <input id="dataDir" type="text" spellcheck="false" placeholder="正在读取默认安装位置…" />
-          <button type="button" id="browse">浏览</button>
-        </div>
-        <p class="hint">版本和共用 web profile 都放在这个目录。</p>
         <label class="toggle"><span>开机自启</span><input id="autoStart" type="checkbox" /></label>
         <label class="toggle"><span>自动安装插件市场</span><input id="seedMarket" type="checkbox" /></label>
         <button class="primary" id="saveSettings" type="button" style="margin-top: 22px">保存</button>
@@ -423,6 +424,12 @@
       return versionNames(state.installed)
     }
 
+    function isManagedVersion(version) {
+      const row = (state.versions || []).find((item) => item && item.version === version)
+      if (row && 'managed' in row) return row.managed !== false
+      return true
+    }
+
     function runningInfo() {
       if (state.running && state.running.version) return state.running
       const row = (state.versions || []).find((item) => item && (item.status === 'running' || item.status === 'starting'))
@@ -527,7 +534,7 @@
       if (have.has(version)) {
         hintEl.textContent = latest && version !== latest
           ? `已安装。可更新到 ${latest}。`
-          : '已安装。插件在共用的 web profile 里，换版本不用重装。'
+          : '已安装。插件和数据在用户目录的 .dsh。'
         setMainAction('play', '启动')
         return
       }
@@ -600,7 +607,6 @@
     updateEl.onclick = async () => {
       const latest = remote.versions?.[0]
       if (!latest) return
-      const from = selected()
       const running = runningInfo()
       const wasLive = Boolean(running && (running.status === 'running' || running.status === 'starting'))
       try {
@@ -616,9 +622,6 @@
           render()
           await post('/api/install', { version: latest })
         }
-        if (from && from !== latest) {
-          await post('/api/uninstall', { version: from })
-        }
         if (wasLive) {
           await startVersion(latest)
           return
@@ -633,7 +636,12 @@
     }
     removeEl.onclick = async () => {
       const version = selected()
-      if (!version || !confirm(`卸载 ${version}？web profile 会保留。`)) return
+      if (!version) return
+      const system = !isManagedVersion(version)
+      const ok = confirm(system
+        ? `卸载 ${version}？这是系统里的 DSH，会从本机移除。插件和数据会保留。`
+        : `卸载 ${version}？插件和数据会保留。`)
+      if (!ok) return
       action = 'uninstall'
       render()
       try {
@@ -706,7 +714,6 @@
       if (data.progress) installProgress = data.progress
       if (!data.installing) installProgress = data.progress || null
       if (!userPicked) picked = preferredPick()
-      if (data.dataDir) dataDirEl.value = data.dataDir
       render()
       maybeLaunch()
     }
@@ -779,14 +786,26 @@
       render()
     }).catch((error) => { hintEl.textContent = error.message })
 
-    const dataDirEl = document.getElementById('dataDir')
+    const selfUpdateEl = document.getElementById('selfUpdate')
+    const appVerEl = document.getElementById('appVer')
+    getJson('/api/self').then((data) => {
+      if (appVerEl) appVerEl.textContent = data.current || ''
+      if (!data.update || !selfUpdateEl) return
+      const url = data.url || `https://github.com/yyh-001/dsh-launcher/releases/latest/download/DSH-Setup.exe`
+      selfUpdateEl.hidden = false
+      selfUpdateEl.textContent = data.latest ? `更新 ${data.latest}` : '更新'
+      selfUpdateEl.title = data.latest ? `更新启动器到 ${data.latest}` : '更新启动器'
+      selfUpdateEl.onclick = () => {
+        post('/api/open', { url }).catch(() => { location.href = url })
+      }
+    }).catch(() => {})
+
     const autoStartEl = document.getElementById('autoStart')
     const seedMarketEl = document.getElementById('seedMarket')
     const settingsHint = document.getElementById('settingsHint')
     const saveSettingsEl = document.getElementById('saveSettings')
 
     function fillSettings(data) {
-      if (data.dataDir) dataDirEl.value = data.dataDir
       if ('autoStart' in data) autoStartEl.checked = Boolean(data.autoStart)
       if ('seedMarket' in data) seedMarketEl.checked = data.seedMarket !== false
     }
@@ -797,23 +816,11 @@
       })
     }
 
-    document.getElementById('browse').onclick = async () => {
-      settingsHint.textContent = '选择文件夹…'
-      try {
-        const data = await post('/api/settings/browse', { path: dataDirEl.value })
-        if (data.path) dataDirEl.value = data.path
-        settingsHint.textContent = data.path ? '' : '没有选择文件夹。'
-      } catch (error) {
-        settingsHint.textContent = error.message
-      }
-    }
-
     saveSettingsEl.onclick = async () => {
       saveSettingsEl.disabled = true
       settingsHint.textContent = '正在保存…'
       try {
         const data = await post('/api/settings', {
-          dataDir: dataDirEl.value,
           autoStart: autoStartEl.checked,
           seedMarket: seedMarketEl.checked,
         })

@@ -7,10 +7,12 @@ import { dirname, join } from 'node:path'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { fileURLToPath } from 'node:url'
+import pkg from './package.json' with { type: 'json' }
 
 const APP_ROOT = dirname(fileURLToPath(import.meta.url))
 const LOCAL_NODE = join(APP_ROOT, 'node')
 export const REGISTRY = (process.env.npm_config_registry || 'https://registry.npmmirror.com').replace(/\/$/, '')
+const USER_AGENT = `dsh-versions/${pkg.version || '0.0.0'}`
 const packumentCache = new Map()
 let npmReady = null
 
@@ -30,7 +32,7 @@ SET "NPX_CLI_JS=%~dp0\\node_modules\\npm\\bin\\npx-cli.js"
 "%NODE_EXE%" "%NPX_CLI_JS%" %*
 `
 
-function parseVer(version) {
+export function parseVer(version) {
   const match = String(version).trim().match(/^(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/)
   if (!match) return null
   return {
@@ -43,7 +45,7 @@ function parseVer(version) {
   }
 }
 
-function cmpVer(a, b) {
+export function cmpVer(a, b) {
   if (a.major !== b.major) return a.major - b.major
   if (a.minor !== b.minor) return a.minor - b.minor
   if (a.patch !== b.patch) return a.patch - b.patch
@@ -60,7 +62,7 @@ async function registryGet(url) {
       const res = await fetch(url, {
         headers: {
           accept: 'application/vnd.npm.install-v1+json, application/json',
-          'user-agent': 'dsh-versions/0.1.0',
+          'user-agent': USER_AGENT,
         },
       })
       if (!res.ok) throw new Error(`registry ${res.status} ${url}`)
@@ -100,7 +102,7 @@ async function fetchToFile(url, dest) {
   let last
   for (let attempt = 0; attempt < 4; attempt += 1) {
     try {
-      const res = await fetch(url, { headers: { 'user-agent': 'dsh-versions/0.1.0' } })
+      const res = await fetch(url, { headers: { 'user-agent': USER_AGENT } })
       if (!res.ok) throw new Error(`tarball ${res.status} ${url}`)
       const expected = Number(res.headers.get('content-length')) || 0
       await pipeline(Readable.fromWeb(res.body), createWriteStream(dest))
@@ -365,6 +367,23 @@ export async function installSpec(root, name, range, onLog = () => {}) {
   await writeFile(join(root, '.npmrc'), `registry=${REGISTRY}\naudit=false\nfund=false\nupdate-notifier=false\nprogress=false\n`)
   onLog(`npm install ${name}@${range}`, { phase: 'resolve' })
   const state = { resolved: 0, fetched: 0, total: 0 }
+  let lastShown = 0
+  let lastResolve = -1
+  const pulse = setInterval(() => {
+    if (state.fetched) {
+      onLog(`已安装 ${state.fetched}/${state.total || state.fetched} 个包`, {
+        phase: 'download',
+        done: state.fetched,
+        total: state.total || state.fetched,
+      })
+      return
+    }
+    onLog(state.resolved ? `已解析 ${state.resolved} 个依赖，仍在安装…` : '正在解析依赖…', {
+      phase: 'resolve',
+      done: state.resolved,
+    })
+  }, 2500)
+  try {
   await runNpm(cli, [
     'install',
     `${name}@${range}`,
@@ -380,15 +399,23 @@ export async function installSpec(root, name, range, onLog = () => {}) {
       const text = String(line).replace(/\s+$/, '')
       const progress = parseInstallProgress(text, state)
       const important = /^(?:npm warn|npm error|npm ERR!)|(?:^|\s)ERR!|added \d+ packages?/i.test(text)
+      const now = Date.now()
       if (progress?.phase === 'download' && (progress.done === 1 || progress.done === progress.total || progress.done % 10 === 0)) {
+        lastShown = now
         onLog(`已安装 ${progress.done}/${progress.total} ${progress.pkg || ''}`.trim(), progress)
-      } else if (progress?.phase === 'resolve' && progress.done && progress.done % 10 === 0) {
+      } else if (progress?.phase === 'resolve' && progress.done && (progress.done !== lastResolve && (progress.done % 10 === 0 || now - lastShown > 800))) {
+        lastResolve = progress.done
+        lastShown = now
         onLog(`已解析 ${progress.done} 个依赖`, progress)
       } else if (important && text) {
+        lastShown = now
         onLog(text, progress || undefined)
       } else if (progress) {
         onLog('', progress)
       }
     },
   })
+  } finally {
+    clearInterval(pulse)
+  }
 }

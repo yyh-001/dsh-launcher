@@ -1,13 +1,14 @@
 import { execFile, spawn } from 'node:child_process'
 import { createServer } from 'node:http'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
-import { existsSync, readdirSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { installSpec, listPackage } from './registry.js'
+import { cmpVer, installSpec, listPackage, parseVer } from './registry.js'
+import pkg from './package.json' with { type: 'json' }
 import {
   autoStartEnabled,
-  browseDirectory,
   ensureSettings,
   loadSettings,
   resolveDataDir,
@@ -22,6 +23,9 @@ const PUBLIC = join(ROOT, 'public')
 let CONFIG = join(DATA, 'config.json')
 const PKG = '@deepseek-ai/dsh'
 const MARKET_PKG = 'dshmarket'
+const APP_VERSION = String(pkg.version || '0.0.0')
+const APP_REPO = 'yyh-001/dsh-launcher'
+const APP_SETUP = 'DSH-Setup.exe'
 const PORT = Number(process.env.PORT || 3780)
 const VERSION_RE = /^[0-9A-Za-z][0-9A-Za-z._+-]*$/
 const SPEC_RE = /^(?:@[a-z0-9._~-]+\/)?[a-z0-9._~-]+(?:@[a-z0-9._~+-]+)?$/i
@@ -40,6 +44,7 @@ let installing = null
 let installProgress = null
 let pluginBusy = false
 let remoteCache = { at: 0, data: null }
+let selfCache = { at: 0, data: null }
 let server = null
 
 function versionDir(version) {
@@ -47,11 +52,59 @@ function versionDir(version) {
 }
 
 function homeDir() {
-  return join(DATA, 'home')
+  return join(homedir(), '.dsh')
+}
+
+function managedBin(version) {
+  return join(versionDir(version), 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
+}
+
+function systemNpmRoots() {
+  const roots = []
+  const seen = new Set()
+  const add = (dir) => {
+    if (!dir || seen.has(dir)) return
+    seen.add(dir)
+    roots.push(dir)
+  }
+  if (process.env.APPDATA) add(join(process.env.APPDATA, 'npm', 'node_modules'))
+  if (process.env.LOCALAPPDATA) add(join(process.env.LOCALAPPDATA, 'npm', 'node_modules'))
+  if (process.env.npm_config_prefix) add(join(process.env.npm_config_prefix, 'node_modules'))
+  for (const key of ['ProgramW6432', 'ProgramFiles', 'ProgramFiles(x86)']) {
+    const base = process.env[key]
+    if (base) add(join(base, 'nodejs', 'node_modules'))
+  }
+  add('/usr/local/lib/node_modules')
+  add(join(homedir(), '.npm-global', 'lib', 'node_modules'))
+  return roots
+}
+
+function detectSystemDsh() {
+  for (const root of systemNpmRoots()) {
+    const pkgRoot = join(root, '@deepseek-ai', 'dsh')
+    const bin = join(pkgRoot, 'lib', 'bin.js')
+    const pkgFile = join(pkgRoot, 'package.json')
+    if (!existsSync(bin) || !existsSync(pkgFile)) continue
+    try {
+      const version = String(JSON.parse(readFileSync(pkgFile, 'utf8')).version || '')
+      if (!VERSION_RE.test(version)) continue
+      return { version, bin, root: pkgRoot }
+    } catch {
+      continue
+    }
+  }
+  return null
+}
+
+function isManaged(version) {
+  return existsSync(managedBin(version))
 }
 
 function binPath(version) {
-  return join(versionDir(version), 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
+  if (isManaged(version)) return managedBin(version)
+  const system = detectSystemDsh()
+  if (system?.version === version) return system.bin
+  return managedBin(version)
 }
 
 function profileManifest() {
@@ -59,15 +112,20 @@ function profileManifest() {
 }
 
 function scanInstalled() {
+  const found = []
   const root = join(DATA, 'versions')
-  if (!existsSync(root)) return []
-  try {
-    return readdirSync(root, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory() && existsSync(binPath(entry.name)))
-      .map((entry) => entry.name)
-  } catch {
-    return []
+  if (existsSync(root)) {
+    try {
+      for (const entry of readdirSync(root, { withFileTypes: true })) {
+        if (entry.isDirectory() && existsSync(managedBin(entry.name))) found.push(entry.name)
+      }
+    } catch {
+      // ignore unreadable versions dir
+    }
   }
+  const system = detectSystemDsh()
+  if (system && !found.includes(system.version)) found.push(system.version)
+  return found
 }
 
 function listedVersions(config) {
@@ -127,6 +185,7 @@ async function snapshot() {
     installed,
     versions: installed.map((version) => ({
       version,
+      managed: isManaged(version),
       status: current?.version === version ? current.status : 'stopped',
       url: current?.version === version ? current.url : null,
     })),
@@ -142,13 +201,14 @@ async function applyDataDir(dir) {
   await mkdir(dir, { recursive: true })
   DATA = dir
   CONFIG = join(DATA, 'config.json')
-  pushLog(`数据目录 ${DATA}`)
+  pushLog(`版本目录 ${DATA}`)
 }
 
 async function publicSettings() {
   const stored = await loadSettings()
   return {
     dataDir: DATA,
+    dshHome: homeDir(),
     autoStart: await autoStartEnabled(),
     seedMarket: stored.seedMarket !== false,
   }
@@ -157,8 +217,8 @@ async function publicSettings() {
 async function saveManagerSettings(body) {
   if (body.dataDir) {
     const dir = safeDataDir(body.dataDir)
-    if (dir !== DATA && current) throw new Error('请先停止再改安装位置')
-    if (installing) throw new Error('正在安装，稍后再改安装位置')
+    if (dir !== DATA && current) throw new Error('请先停止再改版本目录')
+    if (installing) throw new Error('正在安装，稍后再改版本目录')
     await applyDataDir(dir)
   }
   const stored = await saveSettings({
@@ -227,6 +287,51 @@ async function fetchRemote() {
   }
   remoteCache = { at: Date.now(), data }
   return data
+}
+
+function stripTag(tag) {
+  return String(tag || '').trim().replace(/^v/i, '')
+}
+
+async function checkSelfUpdate() {
+  const current = APP_VERSION
+  const url = `https://github.com/${APP_REPO}/releases/latest/download/${APP_SETUP}`
+  const fallback = { current, latest: null, update: false, url }
+  if (selfCache.data && Date.now() - selfCache.at < 30 * 60 * 1000) return selfCache.data
+  try {
+    const latest = await fetchLatestTag()
+    if (!latest) return fallback
+    const cur = parseVer(current)
+    const next = parseVer(latest)
+    const update = Boolean(cur && next && cmpVer(next, cur) > 0)
+    const data = { current, latest, update, url }
+    selfCache = { at: Date.now(), data }
+    return data
+  } catch {
+    return fallback
+  }
+}
+
+async function fetchLatestTag() {
+  try {
+    const res = await fetch(`https://api.github.com/repos/${APP_REPO}/releases/latest`, {
+      headers: {
+        accept: 'application/vnd.github+json',
+        'user-agent': 'dsh-launcher',
+      },
+    })
+    if (res.ok) {
+      const rel = await res.json()
+      return stripTag(rel.tag_name)
+    }
+  } catch { /* HTML fallback */ }
+  const page = await fetch(`https://github.com/${APP_REPO}/releases/latest`, {
+    headers: { 'user-agent': 'dsh-launcher' },
+    redirect: 'follow',
+  })
+  if (!page.ok) return null
+  const match = /\/releases\/tag\/([^/?#]+)/.exec(page.url || '')
+  return match ? stripTag(decodeURIComponent(match[1])) : null
 }
 
 async function installedPlugins() {
@@ -477,14 +582,30 @@ async function stop(version) {
   await emitState()
 }
 
+async function uninstallSystem(ver) {
+  const system = detectSystemDsh()
+  if (!system || system.version !== ver) throw new Error(`${ver} 未安装`)
+  pushLog(`卸载系统 ${ver}`)
+  await rm(system.root, { recursive: true, force: true })
+  const prefix = dirname(dirname(dirname(system.root)))
+  for (const name of ['dsh', 'dsh.cmd', 'dsh.ps1']) {
+    const file = join(prefix, name)
+    if (existsSync(file)) await rm(file, { force: true })
+  }
+}
+
 async function uninstall(version) {
   const ver = safeVersion(version)
   if (current?.version === ver) throw new Error('请先停止再移除')
   const config = await loadConfig()
   const versions = listedVersions(config)
   if (!versions.includes(ver)) throw new Error(`${ver} 未安装`)
-  pushLog(`移除 ${ver}`)
-  await rm(versionDir(ver), { recursive: true, force: true })
+  if (isManaged(ver)) {
+    pushLog(`移除 ${ver}`)
+    await rm(versionDir(ver), { recursive: true, force: true })
+  }
+  const system = detectSystemDsh()
+  if (system?.version === ver) await uninstallSystem(ver)
   config.versions = versions.filter((item) => item !== ver)
   await saveConfig(config)
   await emitState()
@@ -511,6 +632,10 @@ function send(res, status, body, type = 'application/json; charset=utf-8') {
 async function handleApi(req, res, url) {
   if (req.method === 'GET' && url.pathname === '/api/remote') {
     send(res, 200, await fetchRemote())
+    return
+  }
+  if (req.method === 'GET' && url.pathname === '/api/self') {
+    send(res, 200, await checkSelfUpdate())
     return
   }
   if (req.method === 'GET' && url.pathname === '/api/settings') {
@@ -559,10 +684,6 @@ async function handleApi(req, res, url) {
   if (req.method === 'POST' && url.pathname === '/api/uninstall') {
     await uninstall(body.version)
     send(res, 200, { ok: true })
-    return
-  }
-  if (req.method === 'POST' && url.pathname === '/api/settings/browse') {
-    send(res, 200, { path: await browseDirectory(body.path || DATA) })
     return
   }
   if (req.method === 'POST' && url.pathname === '/api/settings') {
@@ -616,7 +737,9 @@ export async function startServer() {
       }
       const type = mime(path)
       if (isTextFile(file)) {
-        send(res, 200, await readFile(path, 'utf8'), `${type}; charset=utf-8`)
+        let body = await readFile(path, 'utf8')
+        if (file === 'index.html') body = body.replaceAll('__APP_VERSION__', APP_VERSION)
+        send(res, 200, body, `${type}; charset=utf-8`)
         return
       }
       send(res, 200, await readFile(path), type)
@@ -629,9 +752,13 @@ export async function startServer() {
   return new Promise((resolve, reject) => {
     server.listen(PORT, '127.0.0.1', () => {
       pushLog(`DSH 管理器 http://127.0.0.1:${PORT}`)
-      pushLog(`数据目录 ${DATA}`)
+      pushLog(`版本目录 ${DATA}`)
+      pushLog(`DSH_HOME ${homeDir()}`)
+      const system = detectSystemDsh()
+      if (system) pushLog(`发现系统已安装 ${system.version}`)
       console.log(`dsh-versions: http://127.0.0.1:${PORT}`)
       console.log(`dsh-versions data: ${DATA}`)
+      console.log(`dsh-versions home: ${homeDir()}`)
       resolve(`http://127.0.0.1:${PORT}`)
     })
     server.on('error', reject)

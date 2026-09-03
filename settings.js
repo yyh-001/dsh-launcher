@@ -23,7 +23,7 @@ function hasInstall(dir) {
 }
 
 export function safeDataDir(dir) {
-  if (typeof dir !== 'string' || !dir.trim()) throw new Error('安装位置不能为空')
+  if (typeof dir !== 'string' || !dir.trim()) throw new Error('版本目录不能为空')
   const resolved = resolve(dir.trim())
   if (!isAbsolute(resolved)) throw new Error('请使用绝对路径')
   return resolved
@@ -123,22 +123,4 @@ export async function setAutoStart(enabled) {
   } catch {
     // already off
   }
-}
-
-export async function browseDirectory(current) {
-  if (process.platform !== 'win32') throw new Error('浏览文件夹目前只支持 Windows')
-  const start = current && isAbsolute(String(current)) ? safeDataDir(current).replace(/'/g, "''") : ''
-  const script = `
-    Add-Type -AssemblyName System.Windows.Forms | Out-Null
-    $d = New-Object System.Windows.Forms.FolderBrowserDialog
-    $d.Description = '选择 DSH 安装位置'
-    $d.ShowNewFolderButton = $true
-    ${start ? `$d.SelectedPath = '${start}'` : ''}
-    if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($d.SelectedPath) }
-  `
-  const { stdout } = await execFileAsync('powershell', ['-STA', '-NoProfile', '-Command', script], {
-    windowsHide: true,
-  })
-  const picked = String(stdout || '').trim()
-  return picked ? safeDataDir(picked) : null
 }
