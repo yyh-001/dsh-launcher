@@ -35,10 +35,38 @@ async function download(url, dest) {
 async function downloadNode() {
   await mkdir(VENDOR, { recursive: true })
   if (existsSync(join(EXTRACTED, 'node.exe'))) return
-  const url = `https://nodejs.org/dist/v${NODE_VERSION}/${ZIP}`
-  console.log(`下载 ${url}`)
-  await download(url, ZIP_PATH)
+  const urls = [
+    `https://npmmirror.com/mirrors/node/v${NODE_VERSION}/${ZIP}`,
+    `https://nodejs.org/dist/v${NODE_VERSION}/${ZIP}`,
+  ]
+  let last
+  for (const url of urls) {
+    try {
+      console.log(`下载 ${url}`)
+      await download(url, ZIP_PATH)
+      last = null
+      break
+    } catch (error) {
+      last = error
+    }
+  }
+  if (last) throw last
   run('powershell', ['-NoProfile', '-Command', `Expand-Archive -Force '${ZIP_PATH}' '${VENDOR}'`])
+}
+
+async function copyNodeRuntime() {
+  await mkdir(join(OUT, 'node'), { recursive: true })
+  await copyFile(join(EXTRACTED, 'node.exe'), join(OUT, 'node', 'node.exe'))
+  for (const name of ['npm', 'npm.cmd', 'npm.ps1', 'npx', 'npx.cmd', 'npx.ps1', 'corepack', 'corepack.cmd']) {
+    const src = join(EXTRACTED, name)
+    if (existsSync(src)) await copyFile(src, join(OUT, 'node', name))
+  }
+  await mkdir(join(OUT, 'node', 'node_modules'), { recursive: true })
+  await cp(join(EXTRACTED, 'node_modules', 'npm'), join(OUT, 'node', 'node_modules', 'npm'), { recursive: true })
+  const corepack = join(EXTRACTED, 'node_modules', 'corepack')
+  if (existsSync(corepack)) {
+    await cp(corepack, join(OUT, 'node', 'node_modules', 'corepack'), { recursive: true })
+  }
 }
 
 async function buildLauncher() {
@@ -49,14 +77,13 @@ async function assemble() {
   rmSync(OUT, { recursive: true, force: true })
   await mkdir(join(OUT, 'public'), { recursive: true })
   await mkdir(join(OUT, 'assets'), { recursive: true })
-  await mkdir(join(OUT, 'node'), { recursive: true })
   await mkdir(join(OUT, 'traybin'), { recursive: true })
-  for (const file of ['start.js', 'server.js', 'registry.js', 'settings.js', 'package.json']) {
+  for (const file of ['start.js', 'server.js', 'registry.js', 'settings.js', 'stdio-unblock.cjs', 'package.json']) {
     await copyFile(join(ROOT, file), join(OUT, file))
   }
   await cp(join(ROOT, 'public'), join(OUT, 'public'), { recursive: true })
   await cp(join(ROOT, 'assets'), join(OUT, 'assets'), { recursive: true })
-  await copyFile(join(EXTRACTED, 'node.exe'), join(OUT, 'node', 'node.exe'))
+  await copyNodeRuntime()
   await cp(join(ROOT, 'node_modules'), join(OUT, 'node_modules'), { recursive: true })
   await copyFile(
     join(ROOT, 'node_modules', 'systray2', 'traybin', 'tray_windows_release.exe'),

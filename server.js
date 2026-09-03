@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { createServer } from 'node:http'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { existsSync, readdirSync } from 'node:fs'
@@ -31,9 +31,13 @@ const START_TIMEOUT_MS = 120_000
 
 const clients = new Set()
 const stateListeners = new Set()
+let host = {
+  onWake: async () => {},
+}
 const logs = []
 let current = null
 let installing = null
+let installProgress = null
 let pluginBusy = false
 let remoteCache = { at: 0, data: null }
 let server = null
@@ -130,6 +134,7 @@ async function snapshot() {
       ? { version: current.version, status: current.status, url: current.url }
       : null,
     dataDir: DATA,
+    progress: installProgress,
   }
 }
 
@@ -292,12 +297,20 @@ async function install(version) {
   }
 
   installing = ver
+  installProgress = { phase: 'resolve' }
   await emitState()
+  emit('progress', installProgress)
   const dir = versionDir(ver)
   await mkdir(dir, { recursive: true })
   pushLog(`安装 ${PKG}@${ver}`)
   try {
-    await installSpec(dir, PKG, ver, pushLog)
+    await installSpec(dir, PKG, ver, (line, progress) => {
+      if (line) pushLog(line)
+      if (progress) {
+        installProgress = progress
+        emit('progress', progress)
+      }
+    })
     if (!existsSync(binPath(ver))) throw new Error('安装完成但找不到 lib/bin.js')
     await mkdir(homeDir(), { recursive: true })
     config.versions = [ver, ...listedVersions(config).filter((item) => item !== ver)]
@@ -311,6 +324,8 @@ async function install(version) {
     throw error
   } finally {
     installing = null
+    installProgress = null
+    emit('progress', { phase: 'idle' })
     await emitState()
   }
 }
@@ -430,6 +445,21 @@ export function onState(listener) {
   return () => stateListeners.delete(listener)
 }
 
+export function setHost(next) {
+  host = { ...host, ...next }
+}
+
+function openLocalUrl(target) {
+  if (typeof target !== 'string' || !/^https?:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?(?:[/?#]|$)/i.test(target)) {
+    throw new Error('只能打开本机地址')
+  }
+  if (process.platform === 'win32') {
+    execFile('cmd', ['/c', 'start', '', target], { windowsHide: true })
+    return
+  }
+  execFile(process.platform === 'darwin' ? 'open' : 'xdg-open', [target])
+}
+
 export { snapshot, stop }
 
 async function stop(version) {
@@ -468,8 +498,14 @@ async function readJson(req) {
 }
 
 function send(res, status, body, type = 'application/json; charset=utf-8') {
-  res.writeHead(status, { 'content-type': type, 'cache-control': 'no-store', connection: 'close' })
-  res.end(typeof body === 'string' ? body : JSON.stringify(body))
+  const payload = Buffer.isBuffer(body) ? body : Buffer.from(typeof body === 'string' ? body : JSON.stringify(body))
+  res.writeHead(status, {
+    'content-type': type,
+    'content-length': payload.length,
+    'cache-control': 'no-store',
+    connection: 'close',
+  })
+  res.end(payload)
 }
 
 async function handleApi(req, res, url) {
@@ -495,6 +531,7 @@ async function handleApi(req, res, url) {
     if (typeof res.flushHeaders === 'function') res.flushHeaders()
     res.write(`event: log\ndata: ${JSON.stringify({ lines: logs.slice(-120) })}\n\n`)
     res.write(`event: state\ndata: ${JSON.stringify(await snapshot())}\n\n`)
+    if (installProgress) res.write(`event: progress\ndata: ${JSON.stringify(installProgress)}\n\n`)
     clients.add(res)
     req.on('close', () => clients.delete(res))
     return
@@ -532,6 +569,16 @@ async function handleApi(req, res, url) {
     send(res, 200, await saveManagerSettings(body))
     return
   }
+  if (req.method === 'POST' && url.pathname === '/api/wake') {
+    await host.onWake?.()
+    send(res, 200, { ok: true })
+    return
+  }
+  if (req.method === 'POST' && url.pathname === '/api/open') {
+    openLocalUrl(body.url)
+    send(res, 200, { ok: true })
+    return
+  }
   send(res, 404, { error: 'not found' })
 }
 
@@ -540,7 +587,12 @@ function mime(path) {
   if (path.endsWith('.js')) return 'text/javascript'
   if (path.endsWith('.png')) return 'image/png'
   if (path.endsWith('.svg')) return 'image/svg+xml'
+  if (path.endsWith('.ico')) return 'image/x-icon'
   return 'text/html'
+}
+
+function isTextFile(file) {
+  return /\.(html|css|js|svg|json|txt|map)$/i.test(file)
 }
 
 export async function startServer() {
@@ -562,7 +614,12 @@ export async function startServer() {
         send(res, 404, 'not found', 'text/plain; charset=utf-8')
         return
       }
-      send(res, 200, await readFile(path, 'utf8'), `${mime(path)}; charset=utf-8`)
+      const type = mime(path)
+      if (isTextFile(file)) {
+        send(res, 200, await readFile(path, 'utf8'), `${type}; charset=utf-8`)
+        return
+      }
+      send(res, 200, await readFile(path), type)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       pushLog(`错误: ${message}`)
@@ -584,8 +641,20 @@ export async function startServer() {
 export async function stopAll() {
   if (current) killTree(current.child.pid)
   current = null
-  await new Promise((resolve) => server?.close(() => resolve()))
+  for (const res of clients) {
+    try { res.end() } catch { /* already gone */ }
+  }
+  clients.clear()
+  const httpServer = server
   server = null
+  if (!httpServer) return
+  if (typeof httpServer.closeAllConnections === 'function') {
+    httpServer.closeAllConnections()
+  }
+  await Promise.race([
+    new Promise((resolve) => httpServer.close(() => resolve())),
+    new Promise((resolve) => setTimeout(resolve, 1500)),
+  ])
 }
 
 if (/server\.js$/i.test(process.argv[1] || '')) {

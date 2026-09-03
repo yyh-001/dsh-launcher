@@ -3,22 +3,24 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>DSH</title>
+  <title>DSH启动器</title>
+  <link rel="icon" href="/favicon.ico?v=dsh" sizes="any" />
+  <link rel="icon" type="image/png" href="/favicon.png?v=dsh" />
   <style>
     :root {
-      --bg: #0e1114;
-      --card: #171c21;
-      --line: #2a333c;
-      --text: #eef3f6;
-      --muted: #8b9aa6;
-      --accent: #3ee0c2;
-      --accent-dim: #1a3d36;
-      --danger: #e57373;
+      --bg: #090909;
+      --card: #111;
+      --line: #2a2a2a;
+      --text: #f2f2f2;
+      --muted: #8a8a8a;
+      --accent: #fff;
+      --accent-dim: #1c1c1c;
+      --danger: #fff;
     }
     * { box-sizing: border-box; }
     html, body { margin: 0; height: 100%; }
     body {
-      background: radial-gradient(1200px 500px at 50% -10%, #1a2a28 0%, var(--bg) 55%);
+      background: var(--bg);
       color: var(--text);
       font: 15px/1.5 "Segoe UI", ui-sans-serif, system-ui, sans-serif;
       display: grid;
@@ -30,31 +32,42 @@
       justify-content: space-between;
       padding: 18px 28px;
     }
-    .brand { font-weight: 650; letter-spacing: 0.12em; font-size: 13px; }
-    nav { display: flex; gap: 4px; background: #12171b; padding: 4px; border-radius: 999px; border: 1px solid var(--line); }
+    .brand { font-weight: 650; letter-spacing: 0.04em; font-size: 16px; }
+    nav { display: flex; gap: 4px; background: #0c0c0c; padding: 4px; border-radius: 999px; border: 1px solid var(--line); }
     nav button {
       border: 0; background: transparent; color: var(--muted);
       padding: 6px 14px; border-radius: 999px; cursor: pointer; font: inherit;
     }
-    nav button.active { background: var(--accent-dim); color: var(--accent); }
+    nav button.active { background: var(--accent); color: #111; }
     main { min-height: 0; }
     .page { display: none; height: 100%; }
     .page.active { display: flex; }
     #page-home, #page-settings { align-items: center; justify-content: center; padding: 24px; }
     .card {
-      width: min(420px, 100%);
-      background: color-mix(in srgb, var(--card) 88%, transparent);
+      width: min(640px, 100%);
+      background: var(--card);
       border: 1px solid var(--line);
       border-radius: 20px;
-      padding: 28px 28px 24px;
-      backdrop-filter: blur(12px);
+      padding: 24px;
     }
-    .card.settings { width: min(480px, 100%); }
+    .card.settings { width: min(560px, 100%); }
+    .home-bar {
+      display: flex;
+      align-items: flex-end;
+      gap: 12px;
+    }
+    .home-main { flex: 1; min-width: 0; }
+    .home-main label { margin-bottom: 8px; }
+    @media (max-width: 560px) {
+      .home-bar { flex-wrap: wrap; }
+      .home-main { flex: 1 1 100%; }
+      .controls { margin-left: auto; }
+    }
     label { display: block; color: var(--muted); font-size: 12px; letter-spacing: 0.08em; margin-bottom: 8px; }
     select, input[type=text] {
       width: 100%;
       appearance: none;
-      background: #0f1418;
+      background: #0c0c0c;
       color: var(--text);
       border: 1px solid var(--line);
       border-radius: 12px;
@@ -62,7 +75,7 @@
       font: inherit;
     }
     select {
-      background: #0f1418 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath fill='%238b9aa6' d='M0 0h12L6 8z'/%3E%3C/svg%3E") no-repeat right 14px center;
+      background: #0c0c0c url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath fill='%238a8a8a' d='M0 0h12L6 8z'/%3E%3C/svg%3E") no-repeat right 14px center;
       padding: 12px 36px 12px 14px;
     }
     select:focus, input[type=text]:focus { outline: 1px solid var(--accent); }
@@ -95,7 +108,7 @@
       height: 26px;
       margin: 0;
       flex: 0 0 auto;
-      background: #2a333c;
+      background: #2a2a2a;
       border: 0;
       border-radius: 999px;
       position: relative;
@@ -109,20 +122,43 @@
       left: 3px;
       width: 20px;
       height: 20px;
-      background: #eef3f6;
+      background: #f2f2f2;
       border-radius: 50%;
       transition: transform 0.15s ease;
     }
     .toggle input:checked { background: var(--accent); }
-    .toggle input:checked::after { transform: translateX(18px); }
+    .toggle input:checked::after { background: #111; transform: translateX(18px); }
     .toggle input:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
-    .hint { color: var(--muted); font-size: 13px; margin: 14px 0 22px; min-height: 1.5em; }
-    .hint a { color: var(--accent); text-decoration: none; }
+    .hint { color: var(--muted); font-size: 13px; margin: 12px 0 0; min-height: 1.5em; }
+    .hint a { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+    .progress {
+      margin-top: 12px;
+      height: 4px;
+      background: #2a2a2a;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .progress[hidden] { display: none; }
+    .progress-bar {
+      height: 100%;
+      width: 0;
+      background: #fff;
+      border-radius: 999px;
+      transition: width 0.15s ease;
+    }
+    .progress.indeterminate .progress-bar {
+      width: 32%;
+      animation: progress-slide 1.1s ease-in-out infinite;
+    }
+    @keyframes progress-slide {
+      0% { transform: translateX(-120%); }
+      100% { transform: translateX(360%); }
+    }
     .primary {
       width: 100%;
       border: 0;
       background: var(--accent);
-      color: #06211b;
+      color: #111;
       font: 600 15px/1 inherit;
       padding: 13px 16px;
       border-radius: 12px;
@@ -134,36 +170,62 @@
     }
     .primary:disabled { opacity: 0.45; cursor: not-allowed; }
     .primary.loading { opacity: 1; cursor: wait; }
-    .primary.stop { background: var(--danger); color: #2a0d0d; }
+    .controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex: 0 0 auto;
+    }
+    .icon-btn {
+      width: 46px;
+      height: 46px;
+      padding: 0;
+      border-radius: 12px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: inherit;
+    }
+    .icon-btn svg {
+      width: 20px;
+      height: 20px;
+    }
+    .icon-btn .ico { display: none; }
+    .icon-btn.play:not(.loading) .ico-play { display: block; }
+    .icon-btn.stop:not(.loading) .ico-stop { display: block; }
+    #main.icon-btn {
+      width: 46px;
+      flex: 0 0 auto;
+      border: 0;
+      background: var(--accent);
+      color: #111;
+    }
+    #main.icon-btn.stop {
+      background: #fff;
+      color: #e11d48;
+      border: 0;
+    }
+    #restart.icon-btn,
+    #update.icon-btn,
+    #remove.icon-btn {
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--text);
+    }
+    .icon-btn[hidden] { display: none; }
+    .icon-btn.loading svg { display: none; }
     .spin {
       display: none;
-      width: 14px;
-      height: 14px;
+      width: 16px;
+      height: 16px;
       border: 2px solid currentColor;
       border-right-color: transparent;
       border-radius: 50%;
       animation: spin 0.65s linear infinite;
     }
-    .primary.loading .spin { display: inline-block; }
+    .icon-btn.loading .spin, .primary.loading .spin { display: block; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .row {
-      display: flex;
-      gap: 10px;
-      margin-top: 10px;
-    }
-    .row[hidden] { display: none; }
-    .row button {
-      flex: 1;
-      border: 1px solid var(--line);
-      background: transparent;
-      color: var(--text);
-      padding: 11px;
-      border-radius: 12px;
-      cursor: pointer;
-      font: inherit;
-    }
-    .row button[hidden] { display: none; }
-    .row button:disabled { opacity: 0.45; cursor: not-allowed; }
     #page-log { flex-direction: column; padding: 0 28px 28px; }
     .logbar { display: flex; justify-content: flex-end; padding: 8px 0; }
     .logbar button {
@@ -173,11 +235,11 @@
       flex: 1;
       margin: 0;
       overflow: auto;
-      background: #0a0d10;
+      background: #050505;
       border: 1px solid var(--line);
       border-radius: 16px;
       padding: 16px;
-      color: #9eb0bc;
+      color: #9a9a9a;
       font: 12px/1.45 ui-monospace, Consolas, monospace;
       white-space: pre-wrap;
     }
@@ -185,7 +247,7 @@
 </head>
 <body>
   <header>
-    <div class="brand">DSH</div>
+    <div class="brand">DSH启动器</div>
     <nav>
       <button class="active" data-tab="home">控制</button>
       <button data-tab="log">终端</button>
@@ -194,14 +256,47 @@
   </header>
   <main>
     <div id="page-home" class="page active">
-      <div class="card">
-        <label for="version">版本</label>
-        <select id="version"></select>
+      <div class="card home">
+        <div class="home-bar">
+          <div class="home-main">
+            <label for="version">版本</label>
+            <select id="version"></select>
+          </div>
+          <div class="controls">
+            <button class="icon-btn" id="update" type="button" hidden aria-label="更新" title="更新">
+              <span class="spin" aria-hidden="true"></span>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path fill="currentColor" d="M12.75 16.5a.75.75 0 0 1-1.5 0V8.81L8.53 11.53a.75.75 0 1 1-1.06-1.06l4-4a.75.75 0 0 1 1.06 0l4 4a.75.75 0 1 1-1.06 1.06L12.75 8.81V16.5Z"/>
+                <path fill="currentColor" d="M5.5 18.25h13a.75.75 0 0 1 0 1.5h-13a.75.75 0 0 1 0-1.5Z"/>
+              </svg>
+            </button>
+            <button class="icon-btn" id="restart" type="button" hidden aria-label="重启" title="重启">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M20 12a8 8 0 1 1-2.3-5.6"/>
+                <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M20 4.5V10h-5.5"/>
+              </svg>
+            </button>
+            <button class="icon-btn" id="remove" type="button" hidden aria-label="卸载" title="卸载">
+              <span class="spin" aria-hidden="true"></span>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path fill="currentColor" d="M9.25 3.5h5.5a.75.75 0 0 1 0 1.5h-5.5a.75.75 0 0 1 0-1.5Z"/>
+                <path fill="currentColor" d="M4.5 6.75h15a.75.75 0 0 1 0 1.5h-.52l-.78 10.05A2.5 2.5 0 0 1 15.72 20.7H8.28a2.5 2.5 0 0 1-2.48-2.4L5.02 8.25H4.5a.75.75 0 0 1 0-1.5Z"/>
+              </svg>
+            </button>
+            <button class="icon-btn play" id="main" type="button" aria-label="启动" title="启动">
+              <span class="spin" aria-hidden="true"></span>
+              <svg class="ico ico-play" viewBox="0 0 24 24" aria-hidden="true">
+                <path fill="currentColor" d="M8.2 5.4v13.2c0 .7.8 1.1 1.4.7l10.2-6.6c.6-.4.6-1.2 0-1.6L9.6 4.7c-.6-.4-1.4 0-1.4.7Z"/>
+              </svg>
+              <svg class="ico ico-stop" viewBox="0 0 24 24" aria-hidden="true">
+                <rect fill="currentColor" x="6.5" y="6.5" width="11" height="11" rx="2.2"/>
+              </svg>
+            </button>
+          </div>
+        </div>
         <p class="hint" id="hint">共用 web profile，换版本不会重装插件。</p>
-        <button class="primary" id="main" type="button"><span class="spin" aria-hidden="true"></span><span id="main-text">启动</span></button>
-        <div class="row" id="actions" hidden>
-          <button type="button" id="restart">重启</button>
-          <button type="button" id="remove">卸载</button>
+        <div class="progress" id="progress" hidden>
+          <div class="progress-bar" id="progress-bar"></div>
         </div>
       </div>
     </div>
@@ -228,8 +323,8 @@
     const versionEl = document.getElementById('version')
     const hintEl = document.getElementById('hint')
     const mainEl = document.getElementById('main')
-    const actionsEl = document.getElementById('actions')
     const restartEl = document.getElementById('restart')
+    const updateEl = document.getElementById('update')
     const removeEl = document.getElementById('remove')
     const logEl = document.getElementById('log')
     let remote = { tags: {}, versions: [] }
@@ -237,6 +332,9 @@
     let picked = ''
     let userPicked = false
     let action = ''
+    let installProgress = null
+    let barPhase = ''
+    let barMaxPct = 0
     const fromLauncher = new URLSearchParams(location.search).has('launch')
     let launchFollowed = false
     let launchRequested = false
@@ -268,9 +366,57 @@
       }).filter(Boolean)
     }
 
-    function setMainLabel(text) {
-      const el = document.getElementById('main-text')
-      if (el) el.textContent = text
+    function setProgress(busy) {
+      const wrap = document.getElementById('progress')
+      const bar = document.getElementById('progress-bar')
+      if (!wrap || !bar) return
+      if (!busy) {
+        wrap.hidden = true
+        wrap.classList.remove('indeterminate')
+        bar.style.width = '0%'
+        barPhase = ''
+        barMaxPct = 0
+        return
+      }
+      wrap.hidden = false
+      const total = Number(installProgress?.total) || 0
+      const done = Number(installProgress?.done) || 0
+      const phase = installProgress?.phase || ''
+      if (phase !== barPhase) {
+        barPhase = phase
+        barMaxPct = 0
+      }
+      let pct = 0
+      if (phase === 'resolve') {
+        pct = Math.min(92, Math.round(100 * (1 - Math.exp(-done / 220))))
+      } else if (total) {
+        pct = Math.max(2, Math.min(100, Math.round((done / total) * 100)))
+      } else {
+        wrap.classList.add('indeterminate')
+        bar.style.width = ''
+        return
+      }
+      wrap.classList.remove('indeterminate')
+      barMaxPct = Math.max(barMaxPct, pct)
+      bar.style.width = `${barMaxPct}%`
+    }
+
+    function progressHint(prefix) {
+      const total = Number(installProgress?.total) || 0
+      const done = Number(installProgress?.done) || 0
+      const phase = installProgress?.phase
+      if (phase === 'resolve') {
+        return done ? `${prefix}… 已解析 ${done} 个依赖` : `${prefix}…`
+      }
+      if (!total) return done ? `${prefix}… 已安装 ${done} 个包` : `${prefix}…`
+      return `${prefix} ${done}/${total}（${Math.round((done / total) * 100)}%）`
+    }
+
+    function setMainAction(mode, label) {
+      mainEl.classList.toggle('play', mode === 'play')
+      mainEl.classList.toggle('stop', mode === 'stop')
+      mainEl.setAttribute('aria-label', label)
+      mainEl.title = label
     }
 
     function installedList() {
@@ -308,7 +454,7 @@
     function render() {
       const have = new Set(installedList())
       const versions = versionList()
-      const current = (userPicked ? selected() : preferredPick()) || versions[0] || ''
+      const current = preferredPick() || versions[0] || ''
       const latest = remote.versions?.[0]
       versionEl.innerHTML = versions.map((version) => {
         const mark = have.has(version) ? ' · 已装' : version === latest ? ' · 最新' : ''
@@ -320,57 +466,78 @@
       const running = runningInfo()
       const thisRun = Boolean(running && running.version === version)
       const live = Boolean(running && (running.status === 'running' || running.status === 'starting'))
-      const installing = state.installing === version || action === 'install'
+      const updating = action === 'update' || Boolean(latest && state.installing === latest && version !== latest)
+      const installing = state.installing === version || action === 'install' || updating
       const starting = (thisRun && running.status === 'starting') || action === 'start'
       const stopping = (thisRun && running.status === 'stopping') || action === 'stop'
-      const loading = installing || starting || stopping
+      const uninstalling = action === 'uninstall'
+      const loading = installing || starting || stopping || uninstalling
+      const canUpdate = Boolean(latest && have.has(version) && version !== latest)
       restartEl.hidden = !(thisRun && running.status === 'running') || loading
-      removeEl.hidden = !have.has(version) || live || loading
-      actionsEl.hidden = restartEl.hidden && removeEl.hidden
+      updateEl.hidden = !(canUpdate || updating) || (loading && !updating)
+      updateEl.disabled = loading
+      updateEl.classList.toggle('loading', updating)
+      updateEl.setAttribute('aria-label', latest ? `更新到 ${latest}` : '更新')
+      updateEl.title = latest ? `更新到 ${latest}` : '更新'
+      removeEl.hidden = !have.has(version) || live || (loading && !uninstalling)
+      removeEl.disabled = loading
+      removeEl.classList.toggle('loading', uninstalling)
       versionEl.disabled = loading || live
-      mainEl.hidden = false
+      mainEl.hidden = updating || uninstalling
       mainEl.disabled = loading || !version
-      mainEl.classList.toggle('loading', loading)
-      mainEl.classList.toggle('stop', thisRun && running.status === 'running' && !loading)
+      mainEl.classList.toggle('loading', loading && !updating && !uninstalling)
+      setProgress(installing)
+
+      if (updating) {
+        hintEl.textContent = progressHint(`正在更新到 ${latest}`)
+        setMainAction('play', '启动')
+        return
+      }
 
       if (installing) {
-        hintEl.textContent = '正在安装…'
-        setMainLabel('安装中')
+        hintEl.textContent = progressHint('正在安装')
+        setMainAction('play', '安装中')
         return
       }
       if (starting) {
         hintEl.textContent = '正在启动…'
-        setMainLabel('启动中')
+        setMainAction('play', '启动中')
         return
       }
       if (stopping) {
         hintEl.textContent = '正在停止…'
-        setMainLabel('停止中')
+        setMainAction('stop', '停止中')
+        return
+      }
+      if (uninstalling) {
+        hintEl.textContent = '正在卸载…'
+        setMainAction('play', '启动')
         return
       }
       if (thisRun && running.status === 'running') {
         hintEl.innerHTML = `运行中 · <a href="${running.url}" target="_blank" rel="noreferrer">${running.url}</a>`
-        setMainLabel('停止')
+        setMainAction('stop', '停止')
         return
       }
       if (!version) {
         hintEl.textContent = remote.versions?.length ? '读不到远程版本。' : '正在读取版本…'
-        setMainLabel('启动')
+        setMainAction('play', '启动')
         return
       }
       if (have.has(version)) {
-        hintEl.textContent = '已安装。插件在共用的 web profile 里，换版本不用重装。'
-        setMainLabel('启动')
+        hintEl.textContent = latest && version !== latest
+          ? `已安装。可更新到 ${latest}。`
+          : '已安装。插件在共用的 web profile 里，换版本不用重装。'
+        setMainAction('play', '启动')
         return
       }
       hintEl.textContent = version === latest ? '最新版本，尚未安装。' : '尚未安装。'
-      setMainLabel('安装并启动')
+      setMainAction('play', '安装并启动')
     }
 
     versionEl.onchange = () => { picked = versionEl.value; userPicked = true; render() }
 
     async function startVersion(version) {
-      const tab = window.open('about:blank', '_blank')
       try {
         if (!installedList().includes(version)) {
           action = 'install'
@@ -381,12 +548,12 @@
         render()
         const data = await post('/api/start', { version })
         if (data.url) {
-          if (tab && !tab.closed) tab.location.href = data.url
-          else window.open(data.url, '_blank')
-        } else if (tab && !tab.closed) tab.close()
-      } catch (error) {
-        if (tab && !tab.closed) tab.close()
-        throw error
+          try {
+            await post('/api/open', { url: data.url })
+          } catch {
+            window.open(data.url, '_blank', 'noopener')
+          }
+        }
       } finally {
         action = ''
         render()
@@ -430,17 +597,63 @@
         alert(error.message)
       }
     }
-    removeEl.onclick = () => {
+    updateEl.onclick = async () => {
+      const latest = remote.versions?.[0]
+      if (!latest) return
+      const from = selected()
+      const running = runningInfo()
+      const wasLive = Boolean(running && (running.status === 'running' || running.status === 'starting'))
+      try {
+        if (wasLive) {
+          action = 'stop'
+          render()
+          await post('/api/stop', { version: running.version })
+        }
+        picked = latest
+        userPicked = true
+        if (!installedList().includes(latest)) {
+          action = 'update'
+          render()
+          await post('/api/install', { version: latest })
+        }
+        if (from && from !== latest) {
+          await post('/api/uninstall', { version: from })
+        }
+        if (wasLive) {
+          await startVersion(latest)
+          return
+        }
+        action = ''
+        render()
+      } catch (error) {
+        action = ''
+        render()
+        alert(error.message)
+      }
+    }
+    removeEl.onclick = async () => {
       const version = selected()
       if (!version || !confirm(`卸载 ${version}？web profile 会保留。`)) return
-      post('/api/uninstall', { version }).catch((error) => alert(error.message))
+      action = 'uninstall'
+      render()
+      try {
+        await post('/api/uninstall', { version })
+      } catch (error) {
+        alert(error.message)
+      } finally {
+        action = ''
+        render()
+      }
     }
     document.getElementById('clear').onclick = () => { logEl.textContent = '' }
 
     function followLaunch(url) {
       if (!fromLauncher || launchFollowed || !url) return
       launchFollowed = true
-      location.replace(url)
+      post('/api/open', { url }).catch(() => {
+        window.open(url, '_blank', 'noopener')
+      })
+      history.replaceState({}, '', '/')
     }
 
     function maybeLaunch() {
@@ -490,6 +703,8 @@
         running,
         loaded: true,
       }
+      if (data.progress) installProgress = data.progress
+      if (!data.installing) installProgress = data.progress || null
       if (!userPicked) picked = preferredPick()
       if (data.dataDir) dataDirEl.value = data.dataDir
       render()
@@ -509,11 +724,33 @@
           // ignore non-state messages
         }
       })
+      events.addEventListener('progress', (event) => {
+        try {
+          const data = JSON.parse(event.data)
+          if (!data || data.phase === 'idle') installProgress = null
+          else installProgress = data
+          render()
+        } catch {
+          // ignore
+        }
+      })
       events.addEventListener('log', (event) => {
         const data = JSON.parse(event.data)
         const lines = data.lines || (data.line ? [data.line] : [])
         for (const line of lines) {
           logEl.textContent += (logEl.textContent ? '\n' : '') + line
+          const unpacked = String(line).match(/^已解开 (\d+)\/(\d+)/)
+          const downloading = String(line).match(/^下载 (\d+) 个包/)
+          if (unpacked) {
+            installProgress = { phase: 'download', done: Number(unpacked[1]), total: Number(unpacked[2]) }
+            render()
+          } else if (downloading) {
+            installProgress = { phase: 'download', done: 0, total: Number(downloading[1]) }
+            render()
+          } else if (String(line).startsWith('解析依赖')) {
+            installProgress = { phase: 'resolve' }
+            render()
+          }
         }
         logEl.scrollTop = logEl.scrollHeight
       })

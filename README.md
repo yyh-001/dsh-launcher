@@ -1,45 +1,49 @@
-# DSH
+<p align="center">
+  <img src="docs/hero.png" alt="DSH启动器" width="880" />
+</p>
 
-轻量 DeepSeek Harness 管理器：选一个版本，启动 `dsh web`。所有版本共用同一个 **web** profile（一份 `DSH_HOME`），换版本不会重装插件。首次会给这个 profile 装上 `dshmarket`。
+<h1 align="center">DSH启动器</h1>
 
-不用 Electron / Tauri / npm CLI。界面走系统浏览器。
+<p align="center">选一个版本，启动 dsh web</p>
+
+轻量 DeepSeek Harness 管理器。版本按目录隔离，web profile 共用一份 `DSH_HOME`，换版本不用重装插件。托盘常驻，界面走系统浏览器。
+
+<p align="center">
+  <img src="docs/screenshot-home.png" alt="控制" width="720" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshot-settings.png" alt="设置" width="720" />
+</p>
+
+## 使用
+
+Windows 安装 `DSH-Setup.exe` 后，桌面打开 **DSH启动器**。管理页：`http://127.0.0.1:3780/`。
+
+- 选版本 → 启动 / 停止 / 更新 / 卸载
+- 更新会装最新版并移除当前旧版
+- 同一时间只跑一个版本；首次启动可预装 `dshmarket`
 
 ## 开发
 
-需要本机 Node.js 22.18+（官方 DSH 要求 `^22.19.0 || >=24`）。
+需要本机 Node.js 22.18+（官方 DSH：`^22.19.0 || >=24`）。
 
 ```sh
 npm install
 npm start
 ```
 
-会打开管理页并挂到托盘。关掉网页不会退出，托盘里点「退出」。
+托盘常驻。只起网页：`npm run server`。
 
-只起网页：
+## 打包
 
-```sh
-npm run server
-```
-
-打开 `http://127.0.0.1:3780`。
-
-## 打包 exe
-
-需要 Rust（`cargo`）和本机 Inno Setup 6（没有的话打包脚本会尝试下载）。会下网拉取便携 Node。
+需要 Rust 与 Inno Setup 6（没有会尝试下载）。便携 Node 从镜像拉取。
 
 ```sh
 npm run dist
 ```
 
-产物：
+- `release/DSH/`：便携目录
+- `release/DSH-Setup.exe`：安装包（默认 `%LOCALAPPDATA%\Programs\DSH`）
 
-- `release/DSH/`：便携目录，双击 `DSH.exe`
-- `release/DSH-Setup.exe`：安装包（默认装到 `%LOCALAPPDATA%\Programs\DSH`，创建桌面「DSH启动器」）
-
-只带便携 `node.exe`，不带 npm；装 DSH 走 registry 直下 tarball。
-
-## 行为
-
-- 二进制按版本隔离；`DSH_HOME` 共用，profile 固定为 `web`
-- 第一次启动时若没有 `dshmarket`，执行 `dsh plugin --profile web add dshmarket`
-- 同一时间只跑一个版本
+安装包带 `node.exe` 与 npm 10。装 DSH 走 `npm install`，仓库默认 [npmmirror](https://registry.npmmirror.com)。

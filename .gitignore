@@ -1,4 +1,5 @@
 data/
+node/
 node_modules/
 release/
 vendor/

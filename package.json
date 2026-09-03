@@ -1,7 +1,7 @@
 {
   "name": "dsh-versions",
   "productName": "DSH",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "description": "Lightweight DSH version manager with tray and one-click Windows exe.",
