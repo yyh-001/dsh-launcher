@@ -2,6 +2,14 @@
   <img src="docs/hero.png" alt="DSH启动器" width="880" />
 </p>
 
+<p align="center">
+  <a href="https://yyh-001.github.io/dsh-launcher/">主页</a>
+  ·
+  <a href="https://github.com/yyh-001/dsh-launcher/releases/latest/download/DSH-Setup.exe">下载</a>
+  ·
+  <a href="https://github.com/yyh-001/dsh-launcher">Star</a>
+</p>
+
 轻量 DeepSeek Harness 管理器。
 
 - **选版本即用**：启动 / 停止 / 重启 / 更新 / 卸载

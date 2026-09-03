@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DSH启动器</title>
+  <meta name="description" content="轻量 DeepSeek Harness 管理器。选一个版本，启动 dsh web。" />
+  <link rel="icon" href="./favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" href="./favicon.png" />
+  <style>
+    :root {
+      --bg: #090909;
+      --fg: #f2f2f2;
+      --mute: #8a8a8a;
+      --line: #2a2a2a;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--fg); }
+    body {
+      font-family: "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+      min-height: 100svh;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: inherit; }
+    header {
+      display: flex;
+      justify-content: flex-end;
+      padding: 1rem 1.2rem;
+    }
+    .stars {
+      display: inline-flex;
+      align-items: center;
+      gap: .4rem;
+      height: 2rem;
+      padding: 0 .75rem;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--fg);
+      text-decoration: none;
+      font-size: .78rem;
+      background: #111;
+    }
+    .stars:hover { border-color: #444; }
+    main {
+      max-width: 40rem;
+      margin: 0 auto;
+      padding: 1.5rem 1.2rem 4rem;
+      text-align: center;
+    }
+    .hero {
+      display: block;
+      width: min(100%, 28rem);
+      margin: 0 auto;
+    }
+    .cta {
+      display: flex;
+      justify-content: center;
+      gap: .7rem;
+      flex-wrap: wrap;
+      margin: 1.8rem 0 0;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 9.5rem;
+      height: 2.6rem;
+      padding: 0 1.15rem;
+      border-radius: 999px;
+      font: inherit;
+      font-size: .9rem;
+      font-weight: 600;
+      text-decoration: none;
+      border: 1px solid transparent;
+    }
+    .btn-go { background: var(--fg); color: #111; }
+    .btn-go:hover { filter: brightness(.92); }
+    .btn-ghost { background: transparent; color: var(--fg); border-color: var(--line); }
+    .btn-ghost:hover { border-color: #555; }
+    .ver {
+      margin: .85rem 0 0;
+      color: var(--mute);
+      font-size: .78rem;
+    }
+    .shot {
+      margin: 2.6rem auto 0;
+      width: min(100%, 36rem);
+      border-radius: .9rem;
+      overflow: hidden;
+      border: 1px solid var(--line);
+    }
+    .shot img { display: block; width: 100%; }
+    footer {
+      margin-top: 2.4rem;
+      color: var(--mute);
+      font-size: .75rem;
+    }
+    footer a { color: var(--fg); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+    :focus-visible { outline: 2px solid var(--fg); outline-offset: 3px; }
+  </style>
+</head>
+<body>
+  <header>
+    <a class="stars" href="https://github.com/yyh-001/dsh-launcher" id="star">
+      ★ <span id="star-count">Star</span>
+    </a>
+  </header>
+  <main>
+    <img class="hero" src="./hero.png" alt="DSH启动器" />
+    <div class="cta">
+      <a class="btn btn-go" id="download" href="https://github.com/yyh-001/dsh-launcher/releases/latest/download/DSH-Setup.exe">下载</a>
+      <a class="btn btn-ghost" href="https://github.com/yyh-001/dsh-launcher">Star</a>
+    </div>
+    <p class="ver" id="ver">Windows · DSH-Setup.exe</p>
+    <figure class="shot">
+      <img src="./screenshot-home.png" alt="管理页" />
+    </figure>
+    <footer>
+      <a href="https://github.com/yyh-001/dsh-launcher">yyh-001/dsh-launcher</a>
+      · MIT
+    </footer>
+  </main>
+  <script>
+    fetch("https://api.github.com/repos/yyh-001/dsh-launcher")
+      .then((r) => r.ok ? r.json() : null)
+      .then((repo) => {
+        if (!repo) return
+        document.getElementById("star-count").textContent = repo.stargazers_count.toLocaleString() + " stars"
+      })
+      .catch(() => {})
+    fetch("https://api.github.com/repos/yyh-001/dsh-launcher/releases/latest")
+      .then((r) => r.ok ? r.json() : null)
+      .then((rel) => {
+        if (!rel || !rel.tag_name) return
+        const asset = (rel.assets || []).find((a) => a.name === "DSH-Setup.exe")
+        if (asset && asset.browser_download_url) {
+          document.getElementById("download").href = asset.browser_download_url
+        }
+        document.getElementById("ver").textContent = "Windows · " + rel.tag_name
+      })
+      .catch(() => {})
+  </script>
+</body>
+</html>
