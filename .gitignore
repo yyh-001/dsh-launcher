@@ -1,0 +1,7 @@
+data/
+node_modules/
+release/
+vendor/
+launcher/target/
+*.log
+.DS_Store

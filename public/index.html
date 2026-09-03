@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DSH</title>
+  <style>
+    :root {
+      --bg: #0b0f12;
+      --panel: #12181d;
+      --line: #22303a;
+      --text: #e8eef2;
+      --muted: #8aa0ad;
+      --accent: #3ee0c2;
+      --warn: #f0b429;
+      --danger: #ff6b6b;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 14px/1.45 ui-sans-serif, system-ui, sans-serif; }
+    body { display: grid; grid-template-rows: auto auto 1fr auto; min-height: 100%; }
+    header, nav, footer { padding: 14px 20px; border-bottom: 1px solid var(--line); }
+    footer { border-bottom: 0; border-top: 1px solid var(--line); }
+    h1 { margin: 0; font-size: 18px; }
+    header p, .muted { color: var(--muted); margin: 4px 0 0; }
+    a { color: var(--accent); }
+    nav { display: flex; gap: 8px; }
+    nav button[data-tab] { padding: 6px 12px; }
+    nav button.active { border-color: var(--accent); color: var(--accent); }
+    main { padding: 16px 20px; min-height: 0; overflow: auto; }
+    .page { display: none; height: 100%; }
+    .page.active { display: block; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; height: 100%; }
+    section, .card {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px;
+    }
+    .grid section { overflow: auto; min-height: 0; }
+    h2 { margin: 0 0 12px; font-size: 13px; color: var(--muted); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid #1b252c; }
+    .row:last-child { border-bottom: 0; }
+    .ver { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+    .tag { font-size: 11px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+    .tag.alpha { color: var(--accent); border-color: #24584e; }
+    .tag.latest, .tag.next { color: var(--warn); border-color: #5a4718; }
+    button, select, input {
+      background: #1a242c; color: var(--text); border: 1px solid #31424d; border-radius: 8px;
+      padding: 5px 10px; font: inherit;
+    }
+    button { cursor: pointer; }
+    button:hover { border-color: var(--accent); }
+    button.danger { color: var(--danger); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+    .toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+    .toolbar input { flex: 1; min-width: 180px; }
+    .plugins { display: grid; gap: 10px; }
+    .plugin { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: start; }
+    .plugin h3 { margin: 0; font-size: 14px; }
+    .plugin p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+    #log {
+      height: 150px; overflow: auto; margin: 0; background: #070a0c; border-radius: 8px;
+      padding: 10px; color: #b7c9d3; font: 12px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace;
+      white-space: pre-wrap;
+    }
+    footer .bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .status { font-size: 12px; color: var(--muted); }
+    .status.running { color: var(--accent); }
+    .status.starting { color: var(--warn); }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>DSH</h1>
+    <p>官方 <a href="https://github.com/deepseek-ai/deepseek-harness" target="_blank" rel="noreferrer">deepseek-harness</a>
+      + 插件市场 <a href="https://github.com/dsh-market/dsh-market" target="_blank" rel="noreferrer">dsh-market</a>。关闭网页不会退出，从托盘退出。</p>
+  </header>
+  <nav>
+    <button class="active" data-tab="versions">版本</button>
+    <button data-tab="market">插件市场</button>
+  </nav>
+  <main>
+    <div id="page-versions" class="page active">
+      <div class="grid">
+        <section>
+          <h2>远程版本</h2>
+          <div id="remote">加载中…</div>
+        </section>
+        <section>
+          <h2>已安装</h2>
+          <div id="local">暂无</div>
+        </section>
+      </div>
+    </div>
+    <div id="page-market" class="page">
+      <div class="toolbar">
+        <select id="target"></select>
+        <select id="category"><option value="">全部分类</option></select>
+        <input id="search" placeholder="搜索插件名 / 作者 / 描述" />
+      </div>
+      <div id="market" class="plugins">打开此页后加载目录…</div>
+    </div>
+  </main>
+  <footer>
+    <div class="bar">
+      <strong>日志</strong>
+      <button id="clear">清空</button>
+    </div>
+    <pre id="log"></pre>
+  </footer>
+  <script>
+    const remoteEl = document.getElementById('remote')
+    const localEl = document.getElementById('local')
+    const logEl = document.getElementById('log')
+    const marketEl = document.getElementById('market')
+    const targetEl = document.getElementById('target')
+    const categoryEl = document.getElementById('category')
+    const searchEl = document.getElementById('search')
+    let remote = { tags: {}, versions: [] }
+    let state = { versions: [], installing: null, pluginBusy: null }
+    let market = { plugins: [], categories: {} }
+    let installed = []
+    let marketLoaded = false
+
+    const post = (path, body) => fetch(path, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then(async (res) => {
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || res.statusText)
+      return data
+    })
+    const act = async (fn) => { try { await fn() } catch (error) { alert(error.message) } }
+    const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[char]))
+
+    document.querySelectorAll('nav [data-tab]').forEach((button) => {
+      button.onclick = () => {
+        document.querySelectorAll('nav [data-tab]').forEach((item) => item.classList.toggle('active', item === button))
+        document.querySelectorAll('.page').forEach((page) => page.classList.toggle('active', page.id === `page-${button.dataset.tab}`))
+        if (button.dataset.tab === 'market') loadMarket()
+      }
+    })
+
+    const tagsOf = (version) => Object.entries(remote.tags || {})
+      .filter(([, value]) => value === version)
+      .map(([name]) => name)
+
+    function renderRemote() {
+      const have = new Set(state.versions.map((item) => item.version))
+      const pinned = [...new Set([remote.tags.alpha, remote.tags.latest, remote.tags.next].filter(Boolean))]
+      const rest = (remote.versions || []).filter((version) => !pinned.includes(version)).slice(0, 16)
+      remoteEl.innerHTML = [...pinned, ...rest].map((version) => {
+        const tags = tagsOf(version).map((tag) => `<span class="tag ${tag}">${tag}</span>`).join(' ')
+        const busy = state.installing === version
+        const done = have.has(version)
+        return `<div class="row"><div><span class="ver">${version}</span> ${tags}</div>
+          <button ${done || busy ? 'disabled' : ''} data-install="${version}">${done ? '已装' : busy ? '安装中' : '安装'}</button></div>`
+      }).join('') || '没有从 npm 读到版本'
+    }
+
+    function renderLocal() {
+      if (!state.versions.length) {
+        localEl.innerHTML = '<p class="muted">还没有安装。建议先装 alpha（当前官方最新预览）。装完会预置 dshmarket。</p>'
+        return
+      }
+      localEl.innerHTML = state.versions.map((item) => {
+        const running = item.status === 'running'
+        const starting = item.status === 'starting'
+        return `<div class="row"><div><div class="ver">${item.version}</div>
+          <div class="status ${item.status}">${starting ? '启动中' : running ? item.url : '未运行'}</div></div>
+          <div class="actions">
+            ${running ? `<button data-open="${item.url}">打开</button><button data-stop="${item.version}">停止</button>`
+              : `<button ${starting ? 'disabled' : ''} data-start="${item.version}">${starting ? '启动中' : '启动'}</button>`}
+            <button class="danger" ${running || starting ? 'disabled' : ''} data-uninstall="${item.version}">卸载</button>
+          </div></div>`
+      }).join('')
+    }
+
+    function renderTargets() {
+      const current = targetEl.value
+      targetEl.innerHTML = state.versions.map((item) => `<option value="${item.version}">${item.version}</option>`).join('')
+        || '<option value="">先安装一个 DSH 版本</option>'
+      if ([...targetEl.options].some((option) => option.value === current)) targetEl.value = current
+    }
+
+    function renderMarket() {
+      const query = searchEl.value.trim().toLowerCase()
+      const category = categoryEl.value
+      const target = targetEl.value
+      const busy = state.pluginBusy
+      const list = market.plugins.filter((plugin) => {
+        if (category && plugin.category !== category) return false
+        if (!query) return true
+        return `${plugin.name} ${plugin.owner} ${plugin.description}`.toLowerCase().includes(query)
+      })
+      const pinned = list.filter((plugin) => plugin.npm === 'dshmarket' || plugin.name === 'dsh-market')
+      const rest = list.filter((plugin) => plugin.npm !== 'dshmarket' && plugin.name !== 'dsh-market').slice(0, 80)
+      const rows = [...pinned, ...rest]
+      if (!rows.length) {
+        marketEl.innerHTML = '<p class="muted">没有匹配的插件。</p>'
+        return
+      }
+      marketEl.innerHTML = rows.map((plugin) => {
+        const have = installed.includes(plugin.npm) || installed.includes(plugin.name)
+        const thisBusy = busy && (busy.spec === plugin.npm || busy.spec === plugin.name)
+        const spec = ((plugin.install || '').match(/add\s+(\S+)/) || [])[1] || plugin.npm || ''
+        return `<article class="card plugin">
+          <div>
+            <h3>${esc(plugin.name)} <span class="tag">${plugin.stars}★</span> ${plugin.npm === 'dshmarket' ? '<span class="tag alpha">内置市场</span>' : ''}</h3>
+            <p>${esc(plugin.description)}</p>
+            <p><a href="${esc(plugin.url)}" target="_blank" rel="noreferrer">${esc(plugin.owner)}</a></p>
+          </div>
+          <button ${!target || have || thisBusy ? 'disabled' : ''} data-spec="${esc(spec)}">
+            ${have ? '已装' : thisBusy ? '安装中' : '安装'}
+          </button>
+        </article>`
+      }).join('')
+    }
+
+    async function loadInstalled() {
+      if (!targetEl.value) { installed = []; renderMarket(); return }
+      const data = await fetch(`/api/plugins?version=${encodeURIComponent(targetEl.value)}`).then((res) => res.json())
+      installed = data.plugins || []
+      renderMarket()
+    }
+
+    async function loadMarket() {
+      if (!marketLoaded) {
+        marketEl.textContent = '正在拉取 awesome-dsh-plugin 目录…'
+        try {
+          market = await fetch('/api/market').then((res) => {
+            if (!res.ok) return res.json().then((data) => { throw new Error(data.error || res.statusText) })
+            return res.json()
+          })
+          categoryEl.innerHTML = '<option value="">全部分类</option>' + Object.entries(market.categories || {}).map(([id, names]) =>
+            `<option value="${id}">${names.zh || names.en || id}</option>`).join('')
+          marketLoaded = true
+        } catch (error) {
+          marketEl.textContent = error.message
+          return
+        }
+      }
+      renderTargets()
+      await loadInstalled()
+    }
+
+    remoteEl.addEventListener('click', (event) => {
+      const version = event.target.dataset.install
+      if (version) act(() => post('/api/install', { version }))
+    })
+    localEl.addEventListener('click', (event) => {
+      const { start, stop, uninstall, open } = event.target.dataset
+      if (open) window.open(open, '_blank')
+      if (start) act(() => post('/api/start', { version: start }).then((data) => data.url && window.open(data.url, '_blank')))
+      if (stop) act(() => post('/api/stop', { version: stop }))
+      if (uninstall) act(() => post('/api/uninstall', { version: uninstall }))
+    })
+    marketEl.addEventListener('click', (event) => {
+      const spec = event.target.dataset.spec
+      if (!spec) return
+      act(() => post('/api/plugin', { version: targetEl.value, spec }))
+    })
+    targetEl.onchange = loadInstalled
+    categoryEl.onchange = renderMarket
+    searchEl.oninput = renderMarket
+    document.getElementById('clear').onclick = () => { logEl.textContent = '' }
+
+    function appendLog(line) {
+      logEl.textContent += (logEl.textContent ? '\n' : '') + line
+      logEl.scrollTop = logEl.scrollHeight
+    }
+
+    const events = new EventSource('/api/events')
+    events.addEventListener('state', (event) => {
+      state = JSON.parse(event.data)
+      renderRemote()
+      renderLocal()
+      renderTargets()
+      if (marketLoaded) loadInstalled()
+    })
+    events.addEventListener('log', (event) => {
+      const data = JSON.parse(event.data)
+      if (data.lines) data.lines.forEach(appendLog)
+      if (data.line) appendLog(data.line)
+    })
+
+    fetch('/api/remote').then((res) => res.json()).then((data) => {
+      remote = data
+      renderRemote()
+    }).catch((error) => { remoteEl.textContent = error.message })
+  </script>
+</body>
+</html>

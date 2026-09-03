@@ -1,0 +1,22 @@
+{
+  "name": "dsh-versions",
+  "productName": "DSH",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Lightweight DSH version manager with plugin market, tray, and one-click Windows exe.",
+  "main": "start.js",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "scripts": {
+    "start": "node start.js",
+    "server": "node server.js",
+    "dist": "node scripts/pack.mjs"
+  },
+  "author": "yyh",
+  "license": "MIT",
+  "dependencies": {
+    "systray2": "^2.1.4"
+  }
+}
