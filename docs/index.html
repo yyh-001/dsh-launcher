@@ -21,43 +21,36 @@
       min-height: 100svh;
       -webkit-font-smoothing: antialiased;
     }
-    a { color: inherit; }
-    header {
-      display: flex;
-      justify-content: flex-end;
-      padding: 1rem 1.2rem;
-    }
-    .stars {
-      display: inline-flex;
-      align-items: center;
-      gap: .4rem;
-      height: 2rem;
-      padding: 0 .75rem;
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      color: var(--fg);
-      text-decoration: none;
-      font-size: .78rem;
-      background: #111;
-    }
-    .stars:hover { border-color: #444; }
     main {
       max-width: 40rem;
       margin: 0 auto;
-      padding: 1.5rem 1.2rem 4rem;
+      padding: 4.5rem 1.2rem 4rem;
       text-align: center;
     }
-    .hero {
+    .logo {
+      width: 4.5rem;
+      height: 4.5rem;
+      border-radius: 1.15rem;
       display: block;
-      width: min(100%, 28rem);
       margin: 0 auto;
+    }
+    h1 {
+      margin: 1.05rem 0 0;
+      font-size: 1.65rem;
+      font-weight: 700;
+      letter-spacing: .02em;
+    }
+    .lead {
+      margin: .45rem 0 0;
+      color: var(--mute);
+      font-size: .95rem;
     }
     .cta {
       display: flex;
       justify-content: center;
       gap: .7rem;
       flex-wrap: wrap;
-      margin: 1.8rem 0 0;
+      margin: 1.7rem 0 0;
     }
     .btn {
       display: inline-flex;
@@ -101,18 +94,15 @@
   </style>
 </head>
 <body>
-  <header>
-    <a class="stars" href="https://github.com/yyh-001/dsh-launcher" id="star">
-      ★ <span id="star-count">Star</span>
-    </a>
-  </header>
   <main>
-    <img class="hero" src="./hero.png" alt="DSH启动器" />
+    <img class="logo" src="./favicon.png" alt="" />
+    <h1>DSH启动器</h1>
+    <p class="lead">选一个版本，启动 dsh web</p>
     <div class="cta">
       <a class="btn btn-go" id="download" href="https://github.com/yyh-001/dsh-launcher/releases/latest/download/DSH-Setup.exe">下载</a>
-      <a class="btn btn-ghost" href="https://github.com/yyh-001/dsh-launcher">Star</a>
+      <a class="btn btn-ghost" id="star" href="https://github.com/yyh-001/dsh-launcher">Star</a>
     </div>
-    <p class="ver" id="ver">Windows · DSH-Setup.exe</p>
+    <p class="ver" id="ver">Windows · v0.1.1</p>
     <figure class="shot">
       <img src="./screenshot-home.png" alt="管理页" />
     </figure>
@@ -126,7 +116,7 @@
       .then((r) => r.ok ? r.json() : null)
       .then((repo) => {
         if (!repo) return
-        document.getElementById("star-count").textContent = repo.stargazers_count.toLocaleString() + " stars"
+        document.getElementById("star").textContent = "★ " + repo.stargazers_count.toLocaleString()
       })
       .catch(() => {})
     fetch("https://api.github.com/repos/yyh-001/dsh-launcher/releases/latest")
