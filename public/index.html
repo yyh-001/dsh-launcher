@@ -6,122 +6,242 @@
   <title>DSH</title>
   <style>
     :root {
-      --bg: #0b0f12;
-      --panel: #12181d;
-      --line: #22303a;
-      --text: #e8eef2;
-      --muted: #8aa0ad;
+      --bg: #0e1114;
+      --card: #171c21;
+      --line: #2a333c;
+      --text: #eef3f6;
+      --muted: #8b9aa6;
       --accent: #3ee0c2;
-      --warn: #f0b429;
-      --danger: #ff6b6b;
+      --accent-dim: #1a3d36;
+      --danger: #e57373;
     }
     * { box-sizing: border-box; }
-    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 14px/1.45 ui-sans-serif, system-ui, sans-serif; }
-    body { display: grid; grid-template-rows: auto auto 1fr auto; min-height: 100%; }
-    header, nav, footer { padding: 14px 20px; border-bottom: 1px solid var(--line); }
-    footer { border-bottom: 0; border-top: 1px solid var(--line); }
-    h1 { margin: 0; font-size: 18px; }
-    header p, .muted { color: var(--muted); margin: 4px 0 0; }
-    a { color: var(--accent); }
-    nav { display: flex; gap: 8px; }
-    nav button[data-tab] { padding: 6px 12px; }
-    nav button.active { border-color: var(--accent); color: var(--accent); }
-    main { padding: 16px 20px; min-height: 0; overflow: auto; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      background: radial-gradient(1200px 500px at 50% -10%, #1a2a28 0%, var(--bg) 55%);
+      color: var(--text);
+      font: 15px/1.5 "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 28px;
+    }
+    .brand { font-weight: 650; letter-spacing: 0.12em; font-size: 13px; }
+    nav { display: flex; gap: 4px; background: #12171b; padding: 4px; border-radius: 999px; border: 1px solid var(--line); }
+    nav button {
+      border: 0; background: transparent; color: var(--muted);
+      padding: 6px 14px; border-radius: 999px; cursor: pointer; font: inherit;
+    }
+    nav button.active { background: var(--accent-dim); color: var(--accent); }
+    main { min-height: 0; }
     .page { display: none; height: 100%; }
-    .page.active { display: block; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; height: 100%; }
-    section, .card {
-      background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px;
+    .page.active { display: flex; }
+    #page-home, #page-settings { align-items: center; justify-content: center; padding: 24px; }
+    .card {
+      width: min(420px, 100%);
+      background: color-mix(in srgb, var(--card) 88%, transparent);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 28px 28px 24px;
+      backdrop-filter: blur(12px);
     }
-    .grid section { overflow: auto; min-height: 0; }
-    h2 { margin: 0 0 12px; font-size: 13px; color: var(--muted); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
-    .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid #1b252c; }
-    .row:last-child { border-bottom: 0; }
-    .ver { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
-    .tag { font-size: 11px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
-    .tag.alpha { color: var(--accent); border-color: #24584e; }
-    .tag.latest, .tag.next { color: var(--warn); border-color: #5a4718; }
-    button, select, input {
-      background: #1a242c; color: var(--text); border: 1px solid #31424d; border-radius: 8px;
-      padding: 5px 10px; font: inherit;
+    .card.settings { width: min(480px, 100%); }
+    label { display: block; color: var(--muted); font-size: 12px; letter-spacing: 0.08em; margin-bottom: 8px; }
+    select, input[type=text] {
+      width: 100%;
+      appearance: none;
+      background: #0f1418;
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font: inherit;
     }
-    button { cursor: pointer; }
-    button:hover { border-color: var(--accent); }
-    button.danger { color: var(--danger); }
-    button:disabled { opacity: 0.45; cursor: not-allowed; }
-    .actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
-    .toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
-    .toolbar input { flex: 1; min-width: 180px; }
-    .plugins { display: grid; gap: 10px; }
-    .plugin { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: start; }
-    .plugin h3 { margin: 0; font-size: 14px; }
-    .plugin p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+    select {
+      background: #0f1418 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath fill='%238b9aa6' d='M0 0h12L6 8z'/%3E%3C/svg%3E") no-repeat right 14px center;
+      padding: 12px 36px 12px 14px;
+    }
+    select:focus, input[type=text]:focus { outline: 1px solid var(--accent); }
+    .path { display: flex; gap: 8px; }
+    .path input { flex: 1; min-width: 0; }
+    .path button {
+      flex: 0 0 auto;
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--text);
+      padding: 0 14px;
+      border-radius: 12px;
+      cursor: pointer;
+      font: inherit;
+    }
+    .toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin: 18px 0 0;
+      color: var(--text);
+      font-size: 14px;
+      letter-spacing: 0;
+      cursor: pointer;
+    }
+    .toggle input {
+      appearance: none;
+      width: 44px;
+      height: 26px;
+      margin: 0;
+      flex: 0 0 auto;
+      background: #2a333c;
+      border: 0;
+      border-radius: 999px;
+      position: relative;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .toggle input::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 20px;
+      height: 20px;
+      background: #eef3f6;
+      border-radius: 50%;
+      transition: transform 0.15s ease;
+    }
+    .toggle input:checked { background: var(--accent); }
+    .toggle input:checked::after { transform: translateX(18px); }
+    .toggle input:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+    .hint { color: var(--muted); font-size: 13px; margin: 14px 0 22px; min-height: 1.5em; }
+    .hint a { color: var(--accent); text-decoration: none; }
+    .primary {
+      width: 100%;
+      border: 0;
+      background: var(--accent);
+      color: #06211b;
+      font: 600 15px/1 inherit;
+      padding: 13px 16px;
+      border-radius: 12px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .primary:disabled { opacity: 0.45; cursor: not-allowed; }
+    .primary.loading { opacity: 1; cursor: wait; }
+    .primary.stop { background: var(--danger); color: #2a0d0d; }
+    .spin {
+      display: none;
+      width: 14px;
+      height: 14px;
+      border: 2px solid currentColor;
+      border-right-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.65s linear infinite;
+    }
+    .primary.loading .spin { display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .row {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .row[hidden] { display: none; }
+    .row button {
+      flex: 1;
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--text);
+      padding: 11px;
+      border-radius: 12px;
+      cursor: pointer;
+      font: inherit;
+    }
+    .row button[hidden] { display: none; }
+    .row button:disabled { opacity: 0.45; cursor: not-allowed; }
+    #page-log { flex-direction: column; padding: 0 28px 28px; }
+    .logbar { display: flex; justify-content: flex-end; padding: 8px 0; }
+    .logbar button {
+      border: 0; background: none; color: var(--muted); cursor: pointer; font: inherit;
+    }
     #log {
-      height: 150px; overflow: auto; margin: 0; background: #070a0c; border-radius: 8px;
-      padding: 10px; color: #b7c9d3; font: 12px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace;
+      flex: 1;
+      margin: 0;
+      overflow: auto;
+      background: #0a0d10;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+      color: #9eb0bc;
+      font: 12px/1.45 ui-monospace, Consolas, monospace;
       white-space: pre-wrap;
     }
-    footer .bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-    .status { font-size: 12px; color: var(--muted); }
-    .status.running { color: var(--accent); }
-    .status.starting { color: var(--warn); }
-    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
   <header>
-    <h1>DSH</h1>
-    <p>官方 <a href="https://github.com/deepseek-ai/deepseek-harness" target="_blank" rel="noreferrer">deepseek-harness</a>
-      + 插件市场 <a href="https://github.com/dsh-market/dsh-market" target="_blank" rel="noreferrer">dsh-market</a>。关闭网页不会退出，从托盘退出。</p>
+    <div class="brand">DSH</div>
+    <nav>
+      <button class="active" data-tab="home">控制</button>
+      <button data-tab="log">终端</button>
+      <button data-tab="settings">设置</button>
+    </nav>
   </header>
-  <nav>
-    <button class="active" data-tab="versions">版本</button>
-    <button data-tab="market">插件市场</button>
-  </nav>
   <main>
-    <div id="page-versions" class="page active">
-      <div class="grid">
-        <section>
-          <h2>远程版本</h2>
-          <div id="remote">加载中…</div>
-        </section>
-        <section>
-          <h2>已安装</h2>
-          <div id="local">暂无</div>
-        </section>
+    <div id="page-home" class="page active">
+      <div class="card">
+        <label for="version">版本</label>
+        <select id="version"></select>
+        <p class="hint" id="hint">共用 web profile，换版本不会重装插件。</p>
+        <button class="primary" id="main" type="button"><span class="spin" aria-hidden="true"></span><span id="main-text">启动</span></button>
+        <div class="row" id="actions" hidden>
+          <button type="button" id="restart">重启</button>
+          <button type="button" id="remove">卸载</button>
+        </div>
       </div>
     </div>
-    <div id="page-market" class="page">
-      <div class="toolbar">
-        <select id="target"></select>
-        <select id="category"><option value="">全部分类</option></select>
-        <input id="search" placeholder="搜索插件名 / 作者 / 描述" />
+    <div id="page-log" class="page">
+      <div class="logbar"><button type="button" id="clear">清空</button></div>
+      <pre id="log"></pre>
+    </div>
+    <div id="page-settings" class="page">
+      <div class="card settings">
+        <label for="dataDir">安装位置</label>
+        <div class="path">
+          <input id="dataDir" type="text" spellcheck="false" placeholder="正在读取默认安装位置…" />
+          <button type="button" id="browse">浏览</button>
+        </div>
+        <p class="hint">版本和共用 web profile 都放在这个目录。</p>
+        <label class="toggle"><span>开机自启</span><input id="autoStart" type="checkbox" /></label>
+        <label class="toggle"><span>自动安装插件市场</span><input id="seedMarket" type="checkbox" /></label>
+        <button class="primary" id="saveSettings" type="button" style="margin-top: 22px">保存</button>
+        <p class="hint" id="settingsHint"></p>
       </div>
-      <div id="market" class="plugins">打开此页后加载目录…</div>
     </div>
   </main>
-  <footer>
-    <div class="bar">
-      <strong>日志</strong>
-      <button id="clear">清空</button>
-    </div>
-    <pre id="log"></pre>
-  </footer>
   <script>
-    const remoteEl = document.getElementById('remote')
-    const localEl = document.getElementById('local')
+    const versionEl = document.getElementById('version')
+    const hintEl = document.getElementById('hint')
+    const mainEl = document.getElementById('main')
+    const actionsEl = document.getElementById('actions')
+    const restartEl = document.getElementById('restart')
+    const removeEl = document.getElementById('remove')
     const logEl = document.getElementById('log')
-    const marketEl = document.getElementById('market')
-    const targetEl = document.getElementById('target')
-    const categoryEl = document.getElementById('category')
-    const searchEl = document.getElementById('search')
     let remote = { tags: {}, versions: [] }
-    let state = { versions: [], installing: null, pluginBusy: null }
-    let market = { plugins: [], categories: {} }
-    let installed = []
-    let marketLoaded = false
+    let state = { installed: [], running: null, installing: null, loaded: false }
+    let picked = ''
+    let userPicked = false
+    let action = ''
+    const fromLauncher = new URLSearchParams(location.search).has('launch')
+    let launchFollowed = false
+    let launchRequested = false
 
-    const post = (path, body) => fetch(path, {
+    const post = (path, body = {}) => fetch(path, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
@@ -130,166 +250,346 @@
       if (!res.ok) throw new Error(data.error || res.statusText)
       return data
     })
-    const act = async (fn) => { try { await fn() } catch (error) { alert(error.message) } }
-    const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-    }[char]))
 
     document.querySelectorAll('nav [data-tab]').forEach((button) => {
       button.onclick = () => {
         document.querySelectorAll('nav [data-tab]').forEach((item) => item.classList.toggle('active', item === button))
         document.querySelectorAll('.page').forEach((page) => page.classList.toggle('active', page.id === `page-${button.dataset.tab}`))
-        if (button.dataset.tab === 'market') loadMarket()
+        if (button.dataset.tab === 'settings') loadSettings()
       }
     })
 
-    const tagsOf = (version) => Object.entries(remote.tags || {})
-      .filter(([, value]) => value === version)
-      .map(([name]) => name)
-
-    function renderRemote() {
-      const have = new Set(state.versions.map((item) => item.version))
-      const pinned = [...new Set([remote.tags.alpha, remote.tags.latest, remote.tags.next].filter(Boolean))]
-      const rest = (remote.versions || []).filter((version) => !pinned.includes(version)).slice(0, 16)
-      remoteEl.innerHTML = [...pinned, ...rest].map((version) => {
-        const tags = tagsOf(version).map((tag) => `<span class="tag ${tag}">${tag}</span>`).join(' ')
-        const busy = state.installing === version
-        const done = have.has(version)
-        return `<div class="row"><div><span class="ver">${version}</span> ${tags}</div>
-          <button ${done || busy ? 'disabled' : ''} data-install="${version}">${done ? '已装' : busy ? '安装中' : '安装'}</button></div>`
-      }).join('') || '没有从 npm 读到版本'
+    function versionNames(list) {
+      if (!Array.isArray(list)) return []
+      return list.map((item) => {
+        if (typeof item === 'string') return item.trim()
+        if (item && typeof item.version === 'string') return item.version.trim()
+        return ''
+      }).filter(Boolean)
     }
 
-    function renderLocal() {
-      if (!state.versions.length) {
-        localEl.innerHTML = '<p class="muted">还没有安装。建议先装 alpha（当前官方最新预览）。装完会预置 dshmarket。</p>'
+    function setMainLabel(text) {
+      const el = document.getElementById('main-text')
+      if (el) el.textContent = text
+    }
+
+    function installedList() {
+      return versionNames(state.installed)
+    }
+
+    function runningInfo() {
+      if (state.running && state.running.version) return state.running
+      const row = (state.versions || []).find((item) => item && (item.status === 'running' || item.status === 'starting'))
+      return row ? { version: row.version, status: row.status, url: row.url } : null
+    }
+
+    function versionList() {
+      const remoteVersions = versionNames(remote.versions)
+      const extra = installedList().filter((version) => !remoteVersions.includes(version))
+      return [...extra, ...remoteVersions]
+    }
+
+    function preferredPick() {
+      const versions = versionList()
+      const installed = installedList()
+      if (userPicked && picked && versions.includes(picked)) return picked
+      const running = runningInfo()
+      if (running?.version && versions.includes(running.version)) return running.version
+      const latest = remote.versions?.[0]
+      if (latest && installed.includes(latest)) return latest
+      if (installed[0] && versions.includes(installed[0])) return installed[0]
+      return latest || versions[0] || ''
+    }
+
+    function selected() {
+      return versionEl.value || preferredPick()
+    }
+
+    function render() {
+      const have = new Set(installedList())
+      const versions = versionList()
+      const current = (userPicked ? selected() : preferredPick()) || versions[0] || ''
+      const latest = remote.versions?.[0]
+      versionEl.innerHTML = versions.map((version) => {
+        const mark = have.has(version) ? ' · 已装' : version === latest ? ' · 最新' : ''
+        return `<option value="${version}">${version}${mark}</option>`
+      }).join('') || '<option value="">暂无版本</option>'
+      if ([...versionEl.options].some((option) => option.value === current)) versionEl.value = current
+
+      const version = versionEl.value
+      const running = runningInfo()
+      const thisRun = Boolean(running && running.version === version)
+      const live = Boolean(running && (running.status === 'running' || running.status === 'starting'))
+      const installing = state.installing === version || action === 'install'
+      const starting = (thisRun && running.status === 'starting') || action === 'start'
+      const stopping = (thisRun && running.status === 'stopping') || action === 'stop'
+      const loading = installing || starting || stopping
+      restartEl.hidden = !(thisRun && running.status === 'running') || loading
+      removeEl.hidden = !have.has(version) || live || loading
+      actionsEl.hidden = restartEl.hidden && removeEl.hidden
+      versionEl.disabled = loading || live
+      mainEl.hidden = false
+      mainEl.disabled = loading || !version
+      mainEl.classList.toggle('loading', loading)
+      mainEl.classList.toggle('stop', thisRun && running.status === 'running' && !loading)
+
+      if (installing) {
+        hintEl.textContent = '正在安装…'
+        setMainLabel('安装中')
         return
       }
-      localEl.innerHTML = state.versions.map((item) => {
-        const running = item.status === 'running'
-        const starting = item.status === 'starting'
-        return `<div class="row"><div><div class="ver">${item.version}</div>
-          <div class="status ${item.status}">${starting ? '启动中' : running ? item.url : '未运行'}</div></div>
-          <div class="actions">
-            ${running ? `<button data-open="${item.url}">打开</button><button data-stop="${item.version}">停止</button>`
-              : `<button ${starting ? 'disabled' : ''} data-start="${item.version}">${starting ? '启动中' : '启动'}</button>`}
-            <button class="danger" ${running || starting ? 'disabled' : ''} data-uninstall="${item.version}">卸载</button>
-          </div></div>`
-      }).join('')
-    }
-
-    function renderTargets() {
-      const current = targetEl.value
-      targetEl.innerHTML = state.versions.map((item) => `<option value="${item.version}">${item.version}</option>`).join('')
-        || '<option value="">先安装一个 DSH 版本</option>'
-      if ([...targetEl.options].some((option) => option.value === current)) targetEl.value = current
-    }
-
-    function renderMarket() {
-      const query = searchEl.value.trim().toLowerCase()
-      const category = categoryEl.value
-      const target = targetEl.value
-      const busy = state.pluginBusy
-      const list = market.plugins.filter((plugin) => {
-        if (category && plugin.category !== category) return false
-        if (!query) return true
-        return `${plugin.name} ${plugin.owner} ${plugin.description}`.toLowerCase().includes(query)
-      })
-      const pinned = list.filter((plugin) => plugin.npm === 'dshmarket' || plugin.name === 'dsh-market')
-      const rest = list.filter((plugin) => plugin.npm !== 'dshmarket' && plugin.name !== 'dsh-market').slice(0, 80)
-      const rows = [...pinned, ...rest]
-      if (!rows.length) {
-        marketEl.innerHTML = '<p class="muted">没有匹配的插件。</p>'
+      if (starting) {
+        hintEl.textContent = '正在启动…'
+        setMainLabel('启动中')
         return
       }
-      marketEl.innerHTML = rows.map((plugin) => {
-        const have = installed.includes(plugin.npm) || installed.includes(plugin.name)
-        const thisBusy = busy && (busy.spec === plugin.npm || busy.spec === plugin.name)
-        const spec = ((plugin.install || '').match(/add\s+(\S+)/) || [])[1] || plugin.npm || ''
-        return `<article class="card plugin">
-          <div>
-            <h3>${esc(plugin.name)} <span class="tag">${plugin.stars}★</span> ${plugin.npm === 'dshmarket' ? '<span class="tag alpha">内置市场</span>' : ''}</h3>
-            <p>${esc(plugin.description)}</p>
-            <p><a href="${esc(plugin.url)}" target="_blank" rel="noreferrer">${esc(plugin.owner)}</a></p>
-          </div>
-          <button ${!target || have || thisBusy ? 'disabled' : ''} data-spec="${esc(spec)}">
-            ${have ? '已装' : thisBusy ? '安装中' : '安装'}
-          </button>
-        </article>`
-      }).join('')
+      if (stopping) {
+        hintEl.textContent = '正在停止…'
+        setMainLabel('停止中')
+        return
+      }
+      if (thisRun && running.status === 'running') {
+        hintEl.innerHTML = `运行中 · <a href="${running.url}" target="_blank" rel="noreferrer">${running.url}</a>`
+        setMainLabel('停止')
+        return
+      }
+      if (!version) {
+        hintEl.textContent = remote.versions?.length ? '读不到远程版本。' : '正在读取版本…'
+        setMainLabel('启动')
+        return
+      }
+      if (have.has(version)) {
+        hintEl.textContent = '已安装。插件在共用的 web profile 里，换版本不用重装。'
+        setMainLabel('启动')
+        return
+      }
+      hintEl.textContent = version === latest ? '最新版本，尚未安装。' : '尚未安装。'
+      setMainLabel('安装并启动')
     }
 
-    async function loadInstalled() {
-      if (!targetEl.value) { installed = []; renderMarket(); return }
-      const data = await fetch(`/api/plugins?version=${encodeURIComponent(targetEl.value)}`).then((res) => res.json())
-      installed = data.plugins || []
-      renderMarket()
-    }
+    versionEl.onchange = () => { picked = versionEl.value; userPicked = true; render() }
 
-    async function loadMarket() {
-      if (!marketLoaded) {
-        marketEl.textContent = '正在拉取 awesome-dsh-plugin 目录…'
-        try {
-          market = await fetch('/api/market').then((res) => {
-            if (!res.ok) return res.json().then((data) => { throw new Error(data.error || res.statusText) })
-            return res.json()
-          })
-          categoryEl.innerHTML = '<option value="">全部分类</option>' + Object.entries(market.categories || {}).map(([id, names]) =>
-            `<option value="${id}">${names.zh || names.en || id}</option>`).join('')
-          marketLoaded = true
-        } catch (error) {
-          marketEl.textContent = error.message
-          return
+    async function startVersion(version) {
+      const tab = window.open('about:blank', '_blank')
+      try {
+        if (!installedList().includes(version)) {
+          action = 'install'
+          render()
+          await post('/api/install', { version })
         }
+        action = 'start'
+        render()
+        const data = await post('/api/start', { version })
+        if (data.url) {
+          if (tab && !tab.closed) tab.location.href = data.url
+          else window.open(data.url, '_blank')
+        } else if (tab && !tab.closed) tab.close()
+      } catch (error) {
+        if (tab && !tab.closed) tab.close()
+        throw error
+      } finally {
+        action = ''
+        render()
       }
-      renderTargets()
-      await loadInstalled()
     }
 
-    remoteEl.addEventListener('click', (event) => {
-      const version = event.target.dataset.install
-      if (version) act(() => post('/api/install', { version }))
-    })
-    localEl.addEventListener('click', (event) => {
-      const { start, stop, uninstall, open } = event.target.dataset
-      if (open) window.open(open, '_blank')
-      if (start) act(() => post('/api/start', { version: start }).then((data) => data.url && window.open(data.url, '_blank')))
-      if (stop) act(() => post('/api/stop', { version: stop }))
-      if (uninstall) act(() => post('/api/uninstall', { version: uninstall }))
-    })
-    marketEl.addEventListener('click', (event) => {
-      const spec = event.target.dataset.spec
-      if (!spec) return
-      act(() => post('/api/plugin', { version: targetEl.value, spec }))
-    })
-    targetEl.onchange = loadInstalled
-    categoryEl.onchange = renderMarket
-    searchEl.oninput = renderMarket
+    mainEl.onclick = async () => {
+      const version = selected()
+      if (!version) return
+      const running = runningInfo()
+      if (running && running.version === version && (running.status === 'running' || running.status === 'starting')) {
+        action = 'stop'
+        render()
+        try {
+          await post('/api/stop', { version })
+        } catch (error) {
+          alert(error.message)
+        } finally {
+          action = ''
+          render()
+        }
+        return
+      }
+      try {
+        await startVersion(version)
+      } catch (error) {
+        alert(error.message)
+      }
+    }
+    restartEl.onclick = async () => {
+      const version = selected()
+      if (!version) return
+      action = 'stop'
+      render()
+      try {
+        await post('/api/stop', { version })
+        await startVersion(version)
+      } catch (error) {
+        action = ''
+        render()
+        alert(error.message)
+      }
+    }
+    removeEl.onclick = () => {
+      const version = selected()
+      if (!version || !confirm(`卸载 ${version}？web profile 会保留。`)) return
+      post('/api/uninstall', { version }).catch((error) => alert(error.message))
+    }
     document.getElementById('clear').onclick = () => { logEl.textContent = '' }
 
-    function appendLog(line) {
-      logEl.textContent += (logEl.textContent ? '\n' : '') + line
-      logEl.scrollTop = logEl.scrollHeight
+    function followLaunch(url) {
+      if (!fromLauncher || launchFollowed || !url) return
+      launchFollowed = true
+      location.replace(url)
     }
 
-    const events = new EventSource('/api/events')
-    events.addEventListener('state', (event) => {
-      state = JSON.parse(event.data)
-      renderRemote()
-      renderLocal()
-      renderTargets()
-      if (marketLoaded) loadInstalled()
-    })
-    events.addEventListener('log', (event) => {
-      const data = JSON.parse(event.data)
-      if (data.lines) data.lines.forEach(appendLog)
-      if (data.line) appendLog(data.line)
-    })
+    function maybeLaunch() {
+      if (!fromLauncher || launchFollowed || !state.loaded) return
+      const running = runningInfo()
+      if (running?.url && running.status === 'running') {
+        followLaunch(running.url)
+        return
+      }
+      if (running?.status === 'starting') {
+        action = 'start'
+        render()
+        return
+      }
+      if (!installedList().length || launchRequested) return
+      launchRequested = true
+      action = 'start'
+      render()
+      post('/api/launch').then((data) => {
+        if (data.url) followLaunch(data.url)
+        else {
+          action = ''
+          render()
+        }
+      }).catch((error) => {
+        action = ''
+        launchRequested = false
+        render()
+        alert(error.message)
+      })
+    }
 
-    fetch('/api/remote').then((res) => res.json()).then((data) => {
+    function applyState(data) {
+      if (!data || typeof data !== 'object') return
+      const installed = [...new Set([...versionNames(data.installed), ...versionNames(data.versions)])]
+      let running = null
+      if (data.running && data.running.version) {
+        running = { version: data.running.version, status: data.running.status, url: data.running.url }
+      } else if (Array.isArray(data.versions)) {
+        const row = data.versions.find((item) => item && (item.status === 'running' || item.status === 'starting'))
+        if (row?.version) running = { version: row.version, status: row.status, url: row.url }
+      }
+      state = {
+        installing: data.installing ?? null,
+        installed,
+        versions: data.versions,
+        running,
+        loaded: true,
+      }
+      if (!userPicked) picked = preferredPick()
+      if (data.dataDir) dataDirEl.value = data.dataDir
+      render()
+      maybeLaunch()
+    }
+
+    function listenEvents() {
+      const events = new EventSource('/api/events')
+      events.addEventListener('state', (event) => {
+        applyState(JSON.parse(event.data))
+      })
+      events.addEventListener('message', (event) => {
+        try {
+          const data = JSON.parse(event.data)
+          if (data && (data.installed || data.versions || data.running)) applyState(data)
+        } catch {
+          // ignore non-state messages
+        }
+      })
+      events.addEventListener('log', (event) => {
+        const data = JSON.parse(event.data)
+        const lines = data.lines || (data.line ? [data.line] : [])
+        for (const line of lines) {
+          logEl.textContent += (logEl.textContent ? '\n' : '') + line
+        }
+        logEl.scrollTop = logEl.scrollHeight
+      })
+    }
+
+    function getJson(path) {
+      return fetch(path, { cache: 'no-store' }).then(async (res) => {
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || res.statusText)
+        return data
+      })
+    }
+
+    Promise.race([
+      getJson('/api/state'),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2500)),
+    ]).then(applyState).catch(() => {
+      state.loaded = true
+      render()
+      maybeLaunch()
+    }).finally(listenEvents)
+
+    getJson('/api/remote').then((data) => {
       remote = data
-      renderRemote()
-    }).catch((error) => { remoteEl.textContent = error.message })
+      if (!userPicked) picked = preferredPick()
+      render()
+    }).catch((error) => { hintEl.textContent = error.message })
+
+    const dataDirEl = document.getElementById('dataDir')
+    const autoStartEl = document.getElementById('autoStart')
+    const seedMarketEl = document.getElementById('seedMarket')
+    const settingsHint = document.getElementById('settingsHint')
+    const saveSettingsEl = document.getElementById('saveSettings')
+
+    function fillSettings(data) {
+      if (data.dataDir) dataDirEl.value = data.dataDir
+      if ('autoStart' in data) autoStartEl.checked = Boolean(data.autoStart)
+      if ('seedMarket' in data) seedMarketEl.checked = data.seedMarket !== false
+    }
+
+    function loadSettings() {
+      return getJson('/api/settings').then(fillSettings).catch((error) => {
+        settingsHint.textContent = error.message
+      })
+    }
+
+    document.getElementById('browse').onclick = async () => {
+      settingsHint.textContent = '选择文件夹…'
+      try {
+        const data = await post('/api/settings/browse', { path: dataDirEl.value })
+        if (data.path) dataDirEl.value = data.path
+        settingsHint.textContent = data.path ? '' : '没有选择文件夹。'
+      } catch (error) {
+        settingsHint.textContent = error.message
+      }
+    }
+
+    saveSettingsEl.onclick = async () => {
+      saveSettingsEl.disabled = true
+      settingsHint.textContent = '正在保存…'
+      try {
+        const data = await post('/api/settings', {
+          dataDir: dataDirEl.value,
+          autoStart: autoStartEl.checked,
+          seedMarket: seedMarketEl.checked,
+        })
+        fillSettings(data)
+        settingsHint.textContent = '已保存。'
+      } catch (error) {
+        settingsHint.textContent = error.message
+      } finally {
+        saveSettingsEl.disabled = false
+      }
+    }
+
+    loadSettings()
   </script>
 </body>
 </html>

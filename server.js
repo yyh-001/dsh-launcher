@@ -1,31 +1,28 @@
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { installSpec, listPackage } from './registry.js'
+import {
+  autoStartEnabled,
+  browseDirectory,
+  ensureSettings,
+  loadSettings,
+  resolveDataDir,
+  safeDataDir,
+  saveSettings,
+  setAutoStart,
+} from './settings.js'
 
 const ROOT = dirname(fileURLToPath(import.meta.url))
-function defaultDataDir() {
-  if (process.env.DSH_VERSIONS_DATA) return process.env.DSH_VERSIONS_DATA
-  const local = join(ROOT, 'data')
-  if (existsSync(join(local, 'config.json'))) return local
-  if (process.env.APPDATA) return join(process.env.APPDATA, 'DSH', 'data')
-  return local
-}
-
-const DATA = defaultDataDir()
+let DATA = resolveDataDir()
 const PUBLIC = join(ROOT, 'public')
-const CONFIG = join(DATA, 'config.json')
+let CONFIG = join(DATA, 'config.json')
 const PKG = '@deepseek-ai/dsh'
 const MARKET_PKG = 'dshmarket'
-const MARKET_URL = process.env.DSHM_REGISTRY_URL || 'https://awesome-dsh-plugin.com/plugins.json'
 const PORT = Number(process.env.PORT || 3780)
-function npmCmd() {
-  const bundled = join(dirname(process.execPath), process.platform === 'win32' ? 'npm.cmd' : 'npm')
-  if (existsSync(bundled)) return bundled
-  return process.platform === 'win32' ? 'npm.cmd' : 'npm'
-}
 const VERSION_RE = /^[0-9A-Za-z][0-9A-Za-z._+-]*$/
 const SPEC_RE = /^(?:@[a-z0-9._~-]+\/)?[a-z0-9._~-]+(?:@[a-z0-9._~+-]+)?$/i
 const GITHUB_SPEC_RE = /^github:[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:#[\w./-]+)?$/
@@ -33,28 +30,49 @@ const READY_RE = /dsh web:\s+(https?:\/\/[^\s]+)/
 const START_TIMEOUT_MS = 120_000
 
 const clients = new Set()
+const stateListeners = new Set()
 const logs = []
-const running = new Map()
+let current = null
 let installing = null
-let pluginBusy = null
+let pluginBusy = false
 let remoteCache = { at: 0, data: null }
-let marketCache = { at: 0, data: null }
 let server = null
 
 function versionDir(version) {
   return join(DATA, 'versions', version)
 }
 
-function homeDir(version) {
-  return join(DATA, 'homes', version)
+function homeDir() {
+  return join(DATA, 'home')
 }
 
 function binPath(version) {
   return join(versionDir(version), 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
 }
 
-function profileManifest(version) {
-  return join(homeDir(version), 'profiles', 'web', 'package.json')
+function profileManifest() {
+  return join(homeDir(), 'profiles', 'web', 'package.json')
+}
+
+function scanInstalled() {
+  const root = join(DATA, 'versions')
+  if (!existsSync(root)) return []
+  try {
+    return readdirSync(root, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && existsSync(binPath(entry.name)))
+      .map((entry) => entry.name)
+  } catch {
+    return []
+  }
+}
+
+function listedVersions(config) {
+  const onDisk = new Set(scanInstalled())
+  const fromConfig = (config.versions || [])
+    .map((item) => (typeof item === 'string' ? item : item.version))
+    .filter((version) => version && onDisk.has(version))
+  const extra = [...onDisk].filter((version) => !fromConfig.includes(version))
+  return [...fromConfig, ...extra]
 }
 
 function safeVersion(version) {
@@ -69,11 +87,6 @@ function safeSpec(spec) {
     throw new Error('非法插件源')
   }
   return spec
-}
-
-function quoteArg(value) {
-  if (process.platform !== 'win32' || !/[\s&()^]/.test(value)) return value
-  return `"${value}"`
 }
 
 async function loadConfig() {
@@ -104,124 +117,115 @@ function emit(event, data) {
 
 async function snapshot() {
   const config = await loadConfig()
+  const installed = listedVersions(config)
   return {
     installing,
-    pluginBusy,
-    versions: config.versions.map((item) => {
-      const proc = running.get(item.version)
-      return {
-        version: item.version,
-        status: proc?.status ?? 'stopped',
-        url: proc?.url ?? null,
-      }
-    }),
+    installed,
+    versions: installed.map((version) => ({
+      version,
+      status: current?.version === version ? current.status : 'stopped',
+      url: current?.version === version ? current.url : null,
+    })),
+    running: current
+      ? { version: current.version, status: current.status, url: current.url }
+      : null,
+    dataDir: DATA,
   }
 }
 
-async function emitState() {
-  emit('state', await snapshot())
+async function applyDataDir(dir) {
+  await mkdir(dir, { recursive: true })
+  DATA = dir
+  CONFIG = join(DATA, 'config.json')
+  pushLog(`数据目录 ${DATA}`)
 }
 
-function runCommand(command, args, { logOutput = true, env, cwd } = {}) {
-  return new Promise((resolve, reject) => {
-    const useShell = process.platform === 'win32'
-    const exe = useShell && /[\s]/.test(command) ? `"${command}"` : command
-    const child = spawn(exe, args.map(quoteArg), {
-      cwd,
-      env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      windowsHide: true,
-      shell: useShell,
-    })
-    let stdout = ''
-    const onChunk = (buf, stream) => {
-      const text = buf.toString('utf8')
-      if (stream === 'stdout') stdout += text
-      if (logOutput) {
-        for (const line of text.split(/\r?\n/)) pushLog(line)
-      }
-    }
-    child.stdout.on('data', (buf) => onChunk(buf, 'stdout'))
-    child.stderr.on('data', (buf) => onChunk(buf, 'stderr'))
-    child.on('error', reject)
-    child.on('close', (code) => {
-      if (code === 0) resolve(stdout)
-      else reject(new Error(`${command} ${args.join(' ')} 退出码 ${code}`))
-    })
+async function publicSettings() {
+  const stored = await loadSettings()
+  return {
+    dataDir: DATA,
+    autoStart: await autoStartEnabled(),
+    seedMarket: stored.seedMarket !== false,
+  }
+}
+
+async function saveManagerSettings(body) {
+  if (body.dataDir) {
+    const dir = safeDataDir(body.dataDir)
+    if (dir !== DATA && current) throw new Error('请先停止再改安装位置')
+    if (installing) throw new Error('正在安装，稍后再改安装位置')
+    await applyDataDir(dir)
+  }
+  const stored = await saveSettings({
+    dataDir: DATA,
+    autoStart: Boolean(body.autoStart),
+    seedMarket: body.seedMarket !== false,
   })
+  try {
+    await setAutoStart(stored.autoStart)
+  } catch (error) {
+    pushLog(`开机自启未写入: ${error instanceof Error ? error.message : error}`)
+  }
+  if (stored.seedMarket) {
+    const versions = listedVersions(await loadConfig())
+    if (versions[0] && !pluginBusy) await seedMarket(versions[0])
+  }
+  await emitState()
+  return publicSettings()
+}
+
+async function emitState() {
+  const snap = await snapshot()
+  emit('state', snap)
+  for (const listener of stateListeners) {
+    try { listener(snap) } catch { /* ignore tray listener errors */ }
+  }
 }
 
 function spawnDsh(version, extra) {
-  const home = homeDir(version)
+  const home = homeDir()
   const bin = binPath(version)
   return spawn(process.execPath, [bin, ...extra], {
     cwd: home,
-    env: { ...process.env, DSH_HOME: home },
+    env: {
+      ...process.env,
+      DSH_HOME: home,
+      npm_config_ignore_workspace_root_check: 'true',
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
   })
 }
 
+async function ensureProfileNpmrc() {
+  const dir = join(homeDir(), 'profiles', 'web')
+  await mkdir(dir, { recursive: true })
+  const file = join(dir, '.npmrc')
+  let text = ''
+  try {
+    text = await readFile(file, 'utf8')
+  } catch {
+    text = ''
+  }
+  if (/(^|\n)ignore-workspace-root-check\s*=/.test(text)) return
+  await writeFile(file, `${text}${text && !text.endsWith('\n') ? '\n' : ''}ignore-workspace-root-check=true\n`)
+}
+
 async function fetchRemote() {
   if (remoteCache.data && Date.now() - remoteCache.at < 60_000) return remoteCache.data
-  const raw = await runCommand(npmCmd(), ['view', PKG, 'versions', 'dist-tags', '--json'], { logOutput: false })
-  const info = JSON.parse(raw)
-  const versions = [...(Array.isArray(info.versions) ? info.versions : [info.versions])].reverse()
-  const tags = info['dist-tags'] ?? {}
+  const info = await listPackage(PKG)
   const data = {
     package: PKG,
     source: 'https://github.com/deepseek-ai/deepseek-harness',
-    tags,
-    versions,
+    tags: info.tags,
+    versions: info.versions,
   }
   remoteCache = { at: Date.now(), data }
   return data
 }
 
-function slimPlugin(plugin) {
-  return {
-    name: plugin.name,
-    owner: plugin.owner,
-    url: plugin.url,
-    page: plugin.page,
-    category: plugin.category,
-    description: plugin.description?.zh || plugin.description?.en || '',
-    npm: plugin.npm,
-    stars: plugin.stars ?? 0,
-    downloads: plugin.downloads,
-    install: plugin.install,
-    added: plugin.added,
-  }
-}
-
-async function fetchMarket() {
-  if (marketCache.data && Date.now() - marketCache.at < 5 * 60_000) return marketCache.data
-  const res = await fetch(MARKET_URL)
-  if (!res.ok) throw new Error(`插件目录请求失败 HTTP ${res.status}`)
-  const raw = await res.json()
-  const plugins = (raw.plugins ?? []).map(slimPlugin)
-  const data = {
-    source: 'https://github.com/dsh-market/dsh-market',
-    catalog: raw.source || 'https://github.com/awesome-dsh-plugin/awesome-dsh-plugin',
-    updated: raw.updated,
-    count: plugins.length,
-    categories: raw.categories ?? {},
-    plugins,
-  }
-  marketCache = { at: Date.now(), data }
-  return data
-}
-
-function specFromPlugin(plugin) {
-  const match = String(plugin.install || '').match(/add\s+(\S+)/)
-  if (match) return safeSpec(match[1])
-  if (plugin.npm) return safeSpec(plugin.npm)
-  throw new Error('无法解析安装源')
-}
-
-async function installedPlugins(version) {
-  const ver = safeVersion(version)
-  const file = profileManifest(ver)
+async function installedPlugins() {
+  const file = profileManifest()
   if (!existsSync(file)) return []
   try {
     const manifest = JSON.parse(await readFile(file, 'utf8'))
@@ -234,18 +238,16 @@ async function installedPlugins(version) {
 async function addPlugin(version, spec) {
   const ver = safeVersion(version)
   const pkg = safeSpec(spec)
-  if (pluginBusy) throw new Error(`正在安装插件 ${pluginBusy.spec}`)
-  const config = await loadConfig()
-  if (!config.versions.some((item) => item.version === ver)) throw new Error(`${ver} 未安装`)
+  if (pluginBusy) throw new Error('正在安装插件')
   if (!existsSync(binPath(ver))) throw new Error('找不到官方入口 lib/bin.js')
 
-  pluginBusy = { version: ver, spec: pkg }
-  await emitState()
-  await mkdir(homeDir(ver), { recursive: true })
-  pushLog(`安装插件 ${pkg} → ${ver}`)
+  pluginBusy = true
+  await mkdir(homeDir(), { recursive: true })
+  await ensureProfileNpmrc()
+  pushLog(`安装插件 ${pkg} 到 web profile`)
   try {
     await new Promise((resolve, reject) => {
-      const child = spawnDsh(ver, ['plugin', '--profile', 'web', 'add', pkg])
+      const child = spawnDsh(ver, ['plugin', '--profile', 'web', 'add', '-w', pkg])
       child.stdout.on('data', (buf) => {
         for (const line of buf.toString('utf8').split(/\r?\n/)) pushLog(`[plugin] ${line}`)
       })
@@ -258,15 +260,16 @@ async function addPlugin(version, spec) {
         else reject(new Error(`dsh plugin add ${pkg} 退出码 ${code}`))
       })
     })
-    pushLog(`${pkg} 安装完成`)
+    pushLog(`${pkg} 已在 web profile`)
   } finally {
-    pluginBusy = null
-    await emitState()
+    pluginBusy = false
   }
 }
 
 async function seedMarket(version) {
-  const plugins = await installedPlugins(version)
+  const settings = await loadSettings()
+  if (settings.seedMarket === false) return
+  const plugins = await installedPlugins()
   if (plugins.includes(MARKET_PKG)) return
   try {
     await addPlugin(version, MARKET_PKG)
@@ -279,24 +282,30 @@ async function install(version) {
   const ver = safeVersion(version)
   if (installing) throw new Error(`正在安装 ${installing}`)
   const config = await loadConfig()
-  if (config.versions.some((item) => item.version === ver)) throw new Error(`${ver} 已安装`)
+  if (listedVersions(config).includes(ver) || existsSync(binPath(ver))) {
+    if (!listedVersions(config).includes(ver)) {
+      config.versions = [ver, ...listedVersions(config)]
+      await saveConfig(config)
+      await emitState()
+    }
+    return
+  }
 
   installing = ver
   await emitState()
   const dir = versionDir(ver)
-  const home = homeDir(ver)
   await mkdir(dir, { recursive: true })
   pushLog(`安装 ${PKG}@${ver}`)
   try {
-    await runCommand(npmCmd(), ['install', '--prefix', dir, `${PKG}@${ver}`])
+    await installSpec(dir, PKG, ver, pushLog)
     if (!existsSync(binPath(ver))) throw new Error('安装完成但找不到 lib/bin.js')
-    await mkdir(home, { recursive: true })
-    config.versions.unshift({ version: ver, dir, home })
+    await mkdir(homeDir(), { recursive: true })
+    config.versions = [ver, ...listedVersions(config).filter((item) => item !== ver)]
     await saveConfig(config)
-    pushLog(`${ver} 安装完成，预装插件市场 dshmarket`)
+    pushLog(`${ver} 安装完成`)
     await seedMarket(ver)
   } catch (error) {
-    if (!config.versions.some((item) => item.version === ver)) {
+    if (!listedVersions(config).includes(ver)) {
       await rm(dir, { recursive: true, force: true })
     }
     throw error
@@ -323,12 +332,12 @@ function killTree(pid) {
 }
 
 function attachProcess(version, child) {
-  const proc = { child, status: 'starting', url: null }
-  running.set(version, proc)
+  current = { version, child, status: 'starting', url: null }
+  const proc = current
   const onChunk = (buf) => {
     const text = buf.toString('utf8')
     for (const line of text.split(/\r?\n/)) {
-      pushLog(`[${version}] ${line}`)
+      pushLog(line)
       const match = line.match(READY_RE)
       if (match && proc.status === 'starting') {
         proc.url = match[1]
@@ -340,61 +349,113 @@ function attachProcess(version, child) {
   child.stdout.on('data', onChunk)
   child.stderr.on('data', onChunk)
   child.on('exit', (code, signal) => {
-    pushLog(`[${version}] 已退出 code=${code ?? '-'} signal=${signal ?? '-'}`)
-    running.delete(version)
+    pushLog(`已退出 code=${code ?? '-'} signal=${signal ?? '-'}`)
+    if (current?.child === child) current = null
     emitState()
   })
   return proc
 }
 
-async function start(version) {
-  const ver = safeVersion(version)
-  if (running.has(ver)) throw new Error(`${ver} 已在运行`)
-  const config = await loadConfig()
-  if (!config.versions.some((item) => item.version === ver)) throw new Error(`${ver} 未安装`)
-  if (!existsSync(binPath(ver))) throw new Error('找不到官方入口 lib/bin.js')
-
-  await mkdir(homeDir(ver), { recursive: true })
-  await seedMarket(ver)
-  pushLog(`启动 ${ver}: dsh web --host 127.0.0.1 --port 0 --no-open`)
-  const child = spawnDsh(ver, ['web', '--host', '127.0.0.1', '--port', '0', '--no-open'])
-  const proc = attachProcess(ver, child)
-  await emitState()
-
+async function waitUntilReady(proc, version) {
   const started = Date.now()
   while (proc.status === 'starting') {
-    if (!running.has(ver)) throw new Error(`${ver} 启动失败`)
+    if (current !== proc) throw new Error(`${version} 启动失败`)
     if (Date.now() - started > START_TIMEOUT_MS) {
-      killTree(child.pid)
-      throw new Error(`${ver} 启动超时`)
+      killTree(proc.child.pid)
+      throw new Error(`${version} 启动超时`)
     }
     await new Promise((resolve) => setTimeout(resolve, 200))
   }
+  if (!proc.url) throw new Error(`${version} 启动失败`)
   return { url: proc.url }
 }
 
-async function stop(version) {
+async function startNow(version) {
   const ver = safeVersion(version)
-  const proc = running.get(ver)
+  if (current?.version === ver && current.status === 'running' && current.url) {
+    return { url: current.url }
+  }
+  if (current?.version === ver && current.status === 'starting') {
+    return waitUntilReady(current, ver)
+  }
+  if (current) await stop()
+  const config = await loadConfig()
+  if (!listedVersions(config).includes(ver)) throw new Error(`${ver} 未安装`)
+  if (!existsSync(binPath(ver))) throw new Error('找不到官方入口 lib/bin.js')
+
+  await mkdir(homeDir(), { recursive: true })
+  await seedMarket(ver)
+  pushLog(`启动 ${ver} · profile web`)
+  const child = spawnDsh(ver, ['web', '--host', '127.0.0.1', '--port', '0', '--no-open'])
+  const proc = attachProcess(ver, child)
+  await emitState()
+  return waitUntilReady(proc, ver)
+}
+
+let startChain = Promise.resolve()
+
+async function start(version) {
+  const run = startChain.then(() => startNow(version))
+  startChain = run.then(() => {}, () => {})
+  return run
+}
+
+export async function launchInstalled() {
+  if (current?.status === 'running' && current.url) {
+    return { version: current.version, url: current.url }
+  }
+  if (current?.status === 'starting' && current.version) {
+    const result = await start(current.version)
+    return { version: current.version, url: result.url }
+  }
+  const installed = listedVersions(await loadConfig())
+  if (!installed.length) return { version: null, url: null }
+  const version = installed[0]
+  const result = await start(version)
+  return { version, url: result.url }
+}
+
+export async function restartInstalled() {
+  const version = current?.version
+  if (current) await stop()
+  if (version) {
+    const result = await start(version)
+    return { version, url: result.url }
+  }
+  return launchInstalled()
+}
+
+export function onState(listener) {
+  stateListeners.add(listener)
+  return () => stateListeners.delete(listener)
+}
+
+export { snapshot, stop }
+
+async function stop(version) {
+  const proc = current
   if (!proc) return
+  if (typeof version === 'string' && version && VERSION_RE.test(version) && proc.version !== version) {
+    throw new Error(`正在运行的是 ${proc.version}`)
+  }
   proc.status = 'stopping'
   await emitState()
   const closed = new Promise((resolve) => proc.child.once('close', resolve))
   killTree(proc.child.pid)
   await Promise.race([closed, new Promise((resolve) => setTimeout(resolve, 5000))])
-  running.delete(ver)
+  if (current?.child === proc.child) current = null
   await emitState()
 }
 
 async function uninstall(version) {
   const ver = safeVersion(version)
-  if (running.has(ver)) throw new Error('请先停止再卸载')
+  if (current?.version === ver) throw new Error('请先停止再移除')
   const config = await loadConfig()
-  if (!config.versions.some((item) => item.version === ver)) throw new Error(`${ver} 未安装`)
-  pushLog(`卸载 ${ver}`)
+  const versions = listedVersions(config)
+  if (!versions.includes(ver)) throw new Error(`${ver} 未安装`)
+  pushLog(`移除 ${ver}`)
   await rm(versionDir(ver), { recursive: true, force: true })
-  await rm(homeDir(ver), { recursive: true, force: true })
-  config.versions = config.versions.filter((item) => item.version !== ver)
+  config.versions = versions.filter((item) => item !== ver)
   await saveConfig(config)
   await emitState()
 }
@@ -407,7 +468,7 @@ async function readJson(req) {
 }
 
 function send(res, status, body, type = 'application/json; charset=utf-8') {
-  res.writeHead(status, { 'content-type': type, 'cache-control': 'no-store' })
+  res.writeHead(status, { 'content-type': type, 'cache-control': 'no-store', connection: 'close' })
   res.end(typeof body === 'string' ? body : JSON.stringify(body))
 }
 
@@ -416,16 +477,12 @@ async function handleApi(req, res, url) {
     send(res, 200, await fetchRemote())
     return
   }
+  if (req.method === 'GET' && url.pathname === '/api/settings') {
+    send(res, 200, await publicSettings())
+    return
+  }
   if (req.method === 'GET' && url.pathname === '/api/state') {
     send(res, 200, await snapshot())
-    return
-  }
-  if (req.method === 'GET' && url.pathname === '/api/market') {
-    send(res, 200, await fetchMarket())
-    return
-  }
-  if (req.method === 'GET' && url.pathname === '/api/plugins') {
-    send(res, 200, { plugins: await installedPlugins(url.searchParams.get('version') || '') })
     return
   }
   if (req.method === 'GET' && url.pathname === '/api/events') {
@@ -433,7 +490,9 @@ async function handleApi(req, res, url) {
       'content-type': 'text/event-stream',
       'cache-control': 'no-cache',
       connection: 'keep-alive',
+      'x-accel-buffering': 'no',
     })
+    if (typeof res.flushHeaders === 'function') res.flushHeaders()
     res.write(`event: log\ndata: ${JSON.stringify({ lines: logs.slice(-120) })}\n\n`)
     res.write(`event: state\ndata: ${JSON.stringify(await snapshot())}\n\n`)
     clients.add(res)
@@ -451,6 +510,10 @@ async function handleApi(req, res, url) {
     send(res, 200, await start(body.version))
     return
   }
+  if (req.method === 'POST' && url.pathname === '/api/launch') {
+    send(res, 200, await launchInstalled())
+    return
+  }
   if (req.method === 'POST' && url.pathname === '/api/stop') {
     await stop(body.version)
     send(res, 200, { ok: true })
@@ -461,10 +524,12 @@ async function handleApi(req, res, url) {
     send(res, 200, { ok: true })
     return
   }
-  if (req.method === 'POST' && url.pathname === '/api/plugin') {
-    const spec = body.spec || (body.plugin ? specFromPlugin(body.plugin) : '')
-    await addPlugin(body.version, spec)
-    send(res, 200, { ok: true })
+  if (req.method === 'POST' && url.pathname === '/api/settings/browse') {
+    send(res, 200, { path: await browseDirectory(body.path || DATA) })
+    return
+  }
+  if (req.method === 'POST' && url.pathname === '/api/settings') {
+    send(res, 200, await saveManagerSettings(body))
     return
   }
   send(res, 404, { error: 'not found' })
@@ -478,8 +543,12 @@ function mime(path) {
   return 'text/html'
 }
 
-export function startServer() {
+export async function startServer() {
   if (server) return Promise.resolve(`http://127.0.0.1:${PORT}`)
+  await ensureSettings()
+  DATA = resolveDataDir()
+  CONFIG = join(DATA, 'config.json')
+  await mkdir(DATA, { recursive: true })
   server = createServer(async (req, res) => {
     try {
       const url = new URL(req.url ?? '/', `http://127.0.0.1:${PORT}`)
@@ -503,7 +572,9 @@ export function startServer() {
   return new Promise((resolve, reject) => {
     server.listen(PORT, '127.0.0.1', () => {
       pushLog(`DSH 管理器 http://127.0.0.1:${PORT}`)
+      pushLog(`数据目录 ${DATA}`)
       console.log(`dsh-versions: http://127.0.0.1:${PORT}`)
+      console.log(`dsh-versions data: ${DATA}`)
       resolve(`http://127.0.0.1:${PORT}`)
     })
     server.on('error', reject)
@@ -511,8 +582,8 @@ export function startServer() {
 }
 
 export async function stopAll() {
-  for (const proc of running.values()) killTree(proc.child.pid)
-  running.clear()
+  if (current) killTree(current.child.pid)
+  current = null
   await new Promise((resolve) => server?.close(() => resolve()))
   server = null
 }

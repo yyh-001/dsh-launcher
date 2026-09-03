@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Lightweight DSH version manager with plugin market, tray, and one-click Windows exe.",
+  "description": "Lightweight DSH version manager with tray and one-click Windows exe.",
   "main": "start.js",
   "engines": {
     "node": ">=22.18.0"

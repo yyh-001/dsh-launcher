@@ -1,7 +1,7 @@
 #![cfg(windows)]
+#![windows_subsystem = "windows"]
 
 use std::os::windows::process::CommandExt;
-use std::path::PathBuf;
 use std::process::Command;
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -25,17 +25,13 @@ fn main() {
         path.push_str(&old);
     }
 
-    let data = PathBuf::from(std::env::var("APPDATA").unwrap_or_default()).join("DSH").join("data");
-
-    let status = Command::new(&node)
+    if let Err(error) = Command::new(&node)
         .arg(&script)
         .current_dir(&root)
         .env("PATH", path)
-        .env("DSH_VERSIONS_DATA", data)
         .creation_flags(CREATE_NO_WINDOW)
-        .status();
-
-    if let Err(error) = status {
+        .spawn()
+    {
         let msg = format!("javascript:alert('DSH 启动失败：{error}');close()");
         let _ = Command::new("mshta").arg(msg).spawn();
         std::process::exit(1);

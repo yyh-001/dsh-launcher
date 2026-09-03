@@ -1,8 +1,8 @@
 # DSH
 
-轻量 DeepSeek Harness 管理器：按官方 [`@deepseek-ai/dsh`](https://github.com/deepseek-ai/deepseek-harness) 隔离安装版本，内置 [dsh-market](https://github.com/dsh-market/dsh-market) 插件市场，托盘常驻，Windows 一键启动。
+轻量 DeepSeek Harness 管理器：选一个版本，启动 `dsh web`。所有版本共用同一个 **web** profile（一份 `DSH_HOME`），换版本不会重装插件。首次会给这个 profile 装上 `dshmarket`。
 
-不用 Electron / Tauri。界面走系统浏览器，后台只跑一个 Node 进程。
+不用 Electron / Tauri / npm CLI。界面走系统浏览器。
 
 ## 开发
 
@@ -25,16 +25,21 @@ npm run server
 
 ## 打包 exe
 
-需要 Rust（`cargo`）和下网下载便携 Node。
+需要 Rust（`cargo`）和本机 Inno Setup 6（没有的话打包脚本会尝试下载）。会下网拉取便携 Node。
 
 ```sh
 npm run dist
 ```
 
-产物在 `release/DSH/`：双击 `DSH.exe` 即可。便携 Node 和 npm 打在包里，系统不用先装 Node。
+产物：
+
+- `release/DSH/`：便携目录，双击 `DSH.exe`
+- `release/DSH-Setup.exe`：安装包（默认装到 `%LOCALAPPDATA%\Programs\DSH`，创建桌面「DSH启动器」）
+
+只带便携 `node.exe`，不带 npm；装 DSH 走 registry 直下 tarball。
 
 ## 行为
 
-- 安装某个 DSH 版本后会对该版本的 `web` profile 执行 `dsh plugin --profile web add dshmarket`
-- 插件目录来自 [awesome-dsh-plugin](https://awesome-dsh-plugin.com/plugins.json)
-- 每个版本使用独立 `DSH_HOME`，互不覆盖
+- 二进制按版本隔离；`DSH_HOME` 共用，profile 固定为 `web`
+- 第一次启动时若没有 `dshmarket`，执行 `dsh plugin --profile web add dshmarket`
+- 同一时间只跑一个版本

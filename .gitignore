@@ -5,3 +5,4 @@ vendor/
 launcher/target/
 *.log
 .DS_Store
+assets/dsh-preview.png
