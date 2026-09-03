@@ -4,7 +4,7 @@
   "version": "0.1.1",
   "private": true,
   "type": "module",
-  "description": "Lightweight DSH version manager with tray and one-click Windows exe.",
+  "description": "DeepSeek Harness 轻量 Windows 启动器。选版本启动 dsh web，共用 web profile，换版本不用重装插件。",
   "main": "start.js",
   "engines": {
     "node": ">=22.18.0"

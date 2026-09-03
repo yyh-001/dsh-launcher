@@ -10,7 +10,7 @@
   <a href="https://github.com/yyh-001/dsh-launcher">Star</a>
 </p>
 
-轻量 DeepSeek Harness 管理器。
+DeepSeek Harness 轻量 Windows 启动器。选版本启动 dsh web，共用 web profile，换版本不用重装插件。
 
 - **选版本即用**：启动 / 停止 / 重启 / 更新 / 卸载
 - **共用 web profile**：一份 `DSH_HOME`，换版本不重装插件
@@ -18,6 +18,8 @@
 - **托盘常驻**：关网页不退出，界面走系统浏览器
 - **自带 Node / npm**：安装包含便携 `node.exe` 与 npm 10，镜像源 npmmirror
 - **同时只跑一个版本**：首次可预装 `dshmarket`
+
+交流 / 反馈：**QQ 群 [993579665](https://qm.qq.com/q/7AD2g70HqS)**（[点击加入](https://qm.qq.com/q/7AD2g70HqS)）
 
 <p align="center">
   <img src="docs/screenshot-home.png" alt="控制" width="720" />
