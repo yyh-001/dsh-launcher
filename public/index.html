@@ -442,13 +442,18 @@
       return [...extra, ...remoteVersions]
     }
 
+    function latestRemoteVersion() {
+      const tagged = typeof remote.tags?.latest === 'string' ? remote.tags.latest.trim() : ''
+      return tagged || versionNames(remote.versions)[0] || ''
+    }
+
     function preferredPick() {
       const versions = versionList()
       const installed = installedList()
       if (userPicked && picked && versions.includes(picked)) return picked
       const running = runningInfo()
       if (running?.version && versions.includes(running.version)) return running.version
-      const latest = remote.versions?.[0]
+      const latest = latestRemoteVersion()
       if (latest && installed.includes(latest)) return latest
       if (installed[0] && versions.includes(installed[0])) return installed[0]
       return latest || versions[0] || ''
@@ -462,7 +467,7 @@
       const have = new Set(installedList())
       const versions = versionList()
       const current = preferredPick() || versions[0] || ''
-      const latest = remote.versions?.[0]
+      const latest = latestRemoteVersion()
       versionEl.innerHTML = versions.map((version) => {
         const mark = have.has(version) ? ' · 已装' : version === latest ? ' · 最新' : ''
         return `<option value="${version}">${version}${mark}</option>`
@@ -605,7 +610,7 @@
       }
     }
     updateEl.onclick = async () => {
-      const latest = remote.versions?.[0]
+      const latest = latestRemoteVersion()
       if (!latest) return
       const running = runningInfo()
       const wasLive = Boolean(running && (running.status === 'running' || running.status === 'starting'))
