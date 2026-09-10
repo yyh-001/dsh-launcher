@@ -18,16 +18,7 @@ export const DEFAULTS = {
   seedMarket: true,
   // 启动失败时按错误点名自动禁用问题插件（兼容模式），再重试
   autoDisablePlugins: true,
-  // AI 自动修复（deepseek-v4-flash）：off 关闭 / plan 只诊断 / safe 白名单动作 / full 任意命令
-  aiRepair: 'full',
-  aiModel: 'deepseek-v4-flash',
-  aiBaseURL: 'https://api.deepseek.com',
-  aiApiKey: '',
-  aiMaxRounds: 2,
-  aiAllowDestructive: false,
 }
-
-export const AI_MODES = ['off', 'plan', 'safe', 'full']
 
 function hasInstall(dir) {
   return existsSync(join(dir, 'config.json')) || existsSync(join(dir, 'versions'))
@@ -76,15 +67,10 @@ export async function saveSettings(patch) {
   merged.autoStart = Boolean(merged.autoStart)
   merged.seedMarket = merged.seedMarket !== false
   merged.autoDisablePlugins = merged.autoDisablePlugins !== false
-  merged.aiRepair = AI_MODES.includes(merged.aiRepair) ? merged.aiRepair : DEFAULTS.aiRepair
-  merged.aiModel = String(merged.aiModel || DEFAULTS.aiModel).trim() || DEFAULTS.aiModel
-  merged.aiBaseURL = String(merged.aiBaseURL || DEFAULTS.aiBaseURL).trim().replace(/\/+$/, '') || DEFAULTS.aiBaseURL
-  merged.aiApiKey = typeof merged.aiApiKey === 'string' ? merged.aiApiKey.trim() : ''
-  const rounds = Number(merged.aiMaxRounds)
-  merged.aiMaxRounds = Number.isFinite(rounds)
-    ? Math.max(0, Math.min(5, Math.trunc(rounds)))
-    : DEFAULTS.aiMaxRounds
-  merged.aiAllowDestructive = merged.aiAllowDestructive === true
+  // 已废弃的 AI 修复配置：清掉历史文件里的残留字段
+  for (const key of ['aiRepair', 'aiModel', 'aiBaseURL', 'aiApiKey', 'aiMaxRounds', 'aiAllowDestructive']) {
+    delete merged[key]
+  }
   await mkdir(SETTINGS_DIR, { recursive: true })
   await writeFile(SETTINGS_FILE, JSON.stringify(merged, null, 2))
   return merged

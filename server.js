@@ -8,14 +8,6 @@ import { fileURLToPath } from 'node:url'
 import { cmpVer, installSpec, listPackage, parseVer } from './registry.js'
 import pkg from './package.json' with { type: 'json' }
 import {
-  AI_MODE_LABELS,
-  classifyFailure,
-  redact,
-  resolveAiConfig,
-  runRepairRound,
-  snapshotProfileFiles,
-} from './repair.js'
-import {
   disableRowId,
   listPlugins,
   ownerOfRow,
@@ -66,16 +58,21 @@ let pluginBusy = false
 let remoteCache = { at: 0, data: null }
 let selfCache = { at: 0, data: null }
 let server = null
-/** 正在进行的 AI 修复轮次（null 表示空闲）。 */
-let repairing = null
-/** 最近一次 AI 修复的报告摘要，供 UI 展示。 */
-let lastRepair = null
-/** 最近一次启动失败的上下文（错误 + 子进程输出尾巴），供 AI 诊断。 */
+/** 最近一次启动失败的上下文（错误 + 子进程输出尾巴）。 */
 let lastFailure = null
 /** 最近一次启动后的页面自检结果（客户端插件包是否都拉得动）。 */
 let lastHealth = null
 /** 需要在日志里打码的敏感串（如 API key）。 */
 let secretValues = []
+
+/** 把 key 之类的敏感串从任意文本里抹掉（dsh 的凭据常出现在子进程输出里）。 */
+function redact(text, secrets = []) {
+  let out = String(text ?? '')
+  for (const secret of secrets) {
+    if (typeof secret === 'string' && secret.length >= 8) out = out.split(secret).join('sk-***')
+  }
+  return out.replace(/\b(sk|ak)-[A-Za-z0-9_-]{8,}/g, '$1-***')
+}
 
 function versionDir(version) {
   return join(DATA, 'versions', version)
@@ -172,6 +169,37 @@ function safeVersion(version) {
     throw new Error('非法版本号')
   }
   return version
+}
+
+/** 保留的版本数：最新的一个 + 最近装的一个（回退用）。 */
+const KEEP_VERSIONS = 2
+
+/**
+ * 装完新版后清理旧版本：只留最新的和上一个，正在运行的除外。
+ * @returns 被清理掉的版本号
+ */
+async function pruneVersions(config) {
+  const versions = listedVersions(config)
+  if (versions.length <= KEEP_VERSIONS) return []
+  const keep = new Set(versions.slice(0, KEEP_VERSIONS))
+  if (current?.version) keep.add(current.version)
+  const removed = []
+  for (const version of versions) {
+    if (keep.has(version)) continue
+    if (!isManaged(version)) continue // 系统装的 dsh 不归启动器管
+    try {
+      await rm(versionDir(version), { recursive: true, force: true })
+      removed.push(version)
+      pushLog(`清理旧版本 ${version}（保留 ${[...keep].join('、')}）`)
+    } catch (error) {
+      pushLog(`清理 ${version} 失败：${error instanceof Error ? error.message : error}`)
+    }
+  }
+  if (removed.length) {
+    config.versions = listedVersions(config)
+    await saveConfig(config)
+  }
+  return removed
 }
 
 function safeSpec(spec) {
@@ -309,7 +337,6 @@ function dshEnv(version) {
     DSH_BIN: binPath(version),
     DSH_VERSION: version,
     DSH_PROFILE: PROFILE_NAME,
-    DSH_LAUNCHER_PLUGIN_TOOL: join(ROOT, 'plugin-tool.js'),
     // 浏览器里堆积的 cookie 会顶爆默认 16KB 的请求头上限（HTTP 431），一并放宽
     NODE_OPTIONS: [process.env.NODE_OPTIONS, '--max-http-header-size=131072'].filter(Boolean).join(' '),
     npm_config_ignore_workspace_root_check: 'true',
@@ -324,11 +351,6 @@ function profileDir() {
 /** dsh 启动参数。 */
 function bootArgs() {
   return [PROFILE_NAME, '--host', '127.0.0.1', '--port', '0', '--no-open']
-}
-
-/** dsh 安装锚点：<版本>/node_modules/@deepseek-ai/dsh/package.json（bundle 解析的第一锚点）。 */
-function installAnchorOf(version) {
-  return join(dirname(dirname(binPath(version))), 'package.json')
 }
 
 function spawnDsh(version, extra) {
@@ -502,6 +524,8 @@ async function install(version) {
     await saveConfig(config)
     pushLog(`${ver} 安装完成`)
     await seedMarket(ver)
+    // 装完新版顺手清掉更旧的（保留最新 + 最近装的一个，正在跑的除外）
+    await pruneVersions(config)
   } catch (error) {
     if (!listedVersions(config).includes(ver)) {
       await rm(dir, { recursive: true, force: true })
@@ -685,81 +709,6 @@ async function startNow(version) {
   return bootOnce(ver)
 }
 
-/** 一次启动尝试里已经执行过的修复命令，用于避免 AI 反复跑同一条。 */
-let repairHistory = []
-
-/**
- * 跑一轮 AI 修复。
- * @returns 是否值得再试一次启动。
- */
-async function repairOnce(version, error, round) {
-  const settings = await loadSettings()
-  const config = resolveAiConfig(settings, homeDir())
-  if (config.mode === 'off') {
-    pushLog('[AI] 自动修复未开启（设置页可选择档位），跳过。')
-    return false
-  }
-  secretValues = config.key ? [config.key] : []
-  const failure = error?.failure || lastFailure
-  repairing = { version, round, at: Date.now(), model: config.model, mode: config.mode }
-  await emitState()
-  try {
-    if (round === 1) {
-      pushLog(`[AI] 启动失败，开始自动修复 · 模型 ${config.model} · 档位 ${AI_MODE_LABELS[config.mode] || config.mode} · key 来源 ${config.keySource}`)
-      snapshotProfileFiles({ profileDir: profileDir(), dshHome: homeDir(), onLog: pushLog })
-    }
-    const report = await runRepairRound({
-      version,
-      binPath: binPath(version),
-      nodePath: process.execPath,
-      dshHome: homeDir(),
-      profile: PROFILE_NAME,
-      profileDir: profileDir(),
-      installAnchor: installAnchorOf(version),
-      childEnv: dshEnv(version),
-      error: failure?.message || error,
-      logTail: failure?.tail || [],
-      config,
-      history: repairHistory.slice(),
-      round,
-      onLog: pushLog,
-    })
-    for (const step of report.executed || []) {
-      if (step.code !== undefined) repairHistory.push(step.command)
-    }
-    const ran = (report.executed || []).filter((step) => step.code !== undefined)
-    const blocked = (report.executed || []).filter((step) => step.skipped)
-    lastRepair = {
-      at: Date.now(),
-      version,
-      round,
-      mode: config.mode,
-      model: config.model,
-      diagnosis: report.plan?.diagnosis || '',
-      rootCause: report.plan?.rootCause || '',
-      userHint: report.plan?.userHint || '',
-      confidence: report.plan?.confidence ?? null,
-      steps: report.plan?.steps?.length ?? 0,
-      executed: ran.length,
-      failed: ran.filter((step) => step.code !== 0).length,
-      blocked: blocked.length,
-      skipped: report.skipped || report.error || '',
-      retry: Boolean(report.retry),
-    }
-    if (report.skipped === 'no-key' || report.error) {
-      pushLog('[AI] 这次没能拿到修复方案，仍按"重试一次"处理（瞬时故障常见）。')
-      return true
-    }
-    return Boolean(report.retry)
-  } catch (error) {
-    pushLog(`[AI] 修复流程异常：${error instanceof Error ? error.message : error}`)
-    return true
-  } finally {
-    repairing = null
-    await emitState()
-  }
-}
-
 /** 一次启动尝试里最多按错误自动禁用几个插件（避免连环禁用不可收拾）。 */
 const MAX_AUTO_DISABLE = 3
 /** 最近一次按错误自动禁用的插件（管理页显示 + 一键恢复）。 */
@@ -799,16 +748,11 @@ async function autoDisableFailedPlugins(error, already) {
   return false
 }
 
-/** 启动失败 → 先按错误自动禁用问题插件（兼容模式）→ 再走 AI 修复，轮数由设置里的"最大轮数"决定。 */
+/** 启动失败 → 按错误自动禁用问题插件（兼容模式）→ 重试，直到成功或无法再修。 */
 async function startWithRepair(version) {
-  const settings = await loadSettings()
-  const config = resolveAiConfig(settings, homeDir())
-  const rounds = config.mode === 'off' ? 0 : config.maxRounds
-  repairHistory = []
   lastAutoFix = null
   const autoDisabled = new Set()
   let lastError
-  let aiRounds = 0
   for (;;) {
     try {
       return await startNow(version)
@@ -818,11 +762,7 @@ async function startWithRepair(version) {
       if (autoDisabled.size < MAX_AUTO_DISABLE && await autoDisableFailedPlugins(error, autoDisabled)) {
         continue
       }
-      if (aiRounds >= rounds) break
-      aiRounds += 1
-      const worth = await repairOnce(version, error, aiRounds)
-      if (!worth) break
-      pushLog(`[AI] 第 ${aiRounds} 轮处理完毕，重试启动…`)
+      break
     }
   }
   throw lastError
@@ -832,17 +772,6 @@ let startChain = Promise.resolve()
 
 async function start(version) {
   const run = startChain.then(() => startWithRepair(version))
-  startChain = run.then(() => {}, () => {})
-  return run
-}
-
-/** 手动触发（管理页按钮）：忽略失败历史，直接启动并按档位修复。 */
-export async function repairNow(version) {
-  const ver = safeVersion(version)
-  const settings = await loadSettings()
-  const config = resolveAiConfig(settings, homeDir())
-  if (config.mode === 'off') throw new Error('AI 修复已关闭：请先在设置页选择"只诊断/白名单动作/任意命令"')
-  const run = startChain.then(() => startWithRepair(ver))
   startChain = run.then(() => {}, () => {})
   return run
 }

@@ -1,7 +1,7 @@
 {
   "name": "dsh-versions",
   "productName": "DSH",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "type": "module",
   "description": "DeepSeek Harness 轻量 Windows 启动器。选一个版本，启动 dsh web。",

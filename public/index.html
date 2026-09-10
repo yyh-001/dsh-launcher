@@ -86,7 +86,7 @@
       .controls { margin-left: auto; }
     }
     label { display: block; color: var(--muted); font-size: 12px; letter-spacing: 0.08em; margin-bottom: 8px; }
-    select, input[type=text] {
+    input[type=text] {
       width: 100%;
       appearance: none;
       background: #0c0c0c;
@@ -96,11 +96,104 @@
       padding: 12px 14px;
       font: inherit;
     }
-    select {
-      background: #0c0c0c url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath fill='%238a8a8a' d='M0 0h12L6 8z'/%3E%3C/svg%3E") no-repeat right 14px center;
-      padding: 12px 36px 12px 14px;
+    input[type=text]:focus { outline: 1px solid var(--accent); }
+    /* 版本下拉：原生 select 的弹出列表无法跟随深色主题，这里整套自绘 */
+    .select { position: relative; }
+    .select-trigger {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      background: #0c0c0c;
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+      transition: border-color 0.15s ease, background 0.15s ease;
     }
-    select:focus { outline: 1px solid var(--accent); }
+    .select-trigger:hover:not(:disabled) { border-color: #3a3a3a; }
+    .select-trigger:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
+    .select-trigger:disabled { opacity: 0.5; cursor: not-allowed; }
+    .select.open .select-trigger { border-color: #4a4a4a; background: #101010; }
+    .select-value {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .select-caret {
+      width: 12px;
+      height: 8px;
+      flex: 0 0 auto;
+      color: var(--muted);
+      transition: transform 0.16s ease;
+    }
+    .select.open .select-caret { transform: rotate(180deg); }
+    .select-panel {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: calc(100% + 6px);
+      z-index: 40;
+      padding: 6px;
+      background: #101010;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: 0 18px 44px rgba(0, 0, 0, 0.6);
+      max-height: min(46vh, 340px);
+      overflow-y: auto;
+      animation: select-in 0.12s ease;
+    }
+    .select-panel[hidden] { display: none; }
+    @keyframes select-in {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: none; }
+    }
+    .select-option {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 9px 11px;
+      border-radius: 9px;
+      font-size: 14px;
+      color: var(--text);
+      cursor: pointer;
+    }
+    .select-option + .select-option { margin-top: 1px; }
+    .select-option.active { background: #1e1e1e; }
+    .select-option.selected { background: #262626; }
+    .select-option.selected .opt-name { font-weight: 600; }
+    .select-option .opt-name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .select-option .opt-badge {
+      flex: 0 0 auto;
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 2px 8px;
+    }
+    .select-option.selected .opt-badge { color: var(--text); border-color: #3d3d3d; }
+    .select-option.more {
+      justify-content: center;
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 4px;
+      border-top: 1px solid var(--line);
+      border-radius: 0 0 9px 9px;
+    }
+    .select-option.more.active { background: #1a1a1a; color: var(--text); }
     .toggle {
       display: flex;
       align-items: center;
@@ -301,18 +394,23 @@
     .plugin-name { color: var(--text); font-weight: 600; font-size: 14px; letter-spacing: 0; overflow-wrap: anywhere; }
     .plugin-meta { color: var(--muted); font-size: 12px; letter-spacing: 0; overflow-wrap: anywhere; }
     .plugin-empty { color: var(--muted); font-size: 13px; padding: 10px 8px; }
-    /* 深色滚动条，避免默认亮色滚动条糊在开关上 */
-    .plugin-list, #log { scrollbar-width: thin; scrollbar-color: #3a3a3a transparent; }
-    .plugin-list::-webkit-scrollbar, #log::-webkit-scrollbar { width: 10px; height: 10px; }
-    .plugin-list::-webkit-scrollbar-track, #log::-webkit-scrollbar-track { background: transparent; }
-    .plugin-list::-webkit-scrollbar-thumb, #log::-webkit-scrollbar-thumb {
-      background: #3a3a3a;
+    /* 深色滚动条：默认亮色条在暗色面板上很扎眼，统一成细灰条 */
+    .select-panel, .plugin-list, #log { scrollbar-width: thin; scrollbar-color: #333 transparent; }
+    .select-panel::-webkit-scrollbar, .plugin-list::-webkit-scrollbar, #log::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    .select-panel::-webkit-scrollbar-track, .plugin-list::-webkit-scrollbar-track, #log::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .select-panel::-webkit-scrollbar-thumb, .plugin-list::-webkit-scrollbar-thumb, #log::-webkit-scrollbar-thumb {
+      background: #333;
       border-radius: 999px;
-      border: 3px solid transparent;
+      border: 2px solid transparent;
       background-clip: content-box;
     }
-    .plugin-list::-webkit-scrollbar-thumb:hover, #log::-webkit-scrollbar-thumb:hover {
-      background: #525252;
+    .select-panel::-webkit-scrollbar-thumb:hover, .plugin-list::-webkit-scrollbar-thumb:hover, #log::-webkit-scrollbar-thumb:hover {
+      background: #4d4d4d;
       background-clip: content-box;
     }
   </style>
@@ -336,8 +434,14 @@
       <div class="card home">
         <div class="home-bar">
           <div class="home-main">
-            <label for="version">版本</label>
-            <select id="version"></select>
+            <label for="versionTrigger">版本</label>
+            <div class="select" id="versionPicker">
+              <button type="button" class="select-trigger" id="versionTrigger" aria-haspopup="listbox" aria-expanded="false">
+                <span class="select-value" id="versionValue">加载中…</span>
+                <svg class="select-caret" viewBox="0 0 12 8" aria-hidden="true"><path fill="currentColor" d="M0 0h12L6 8z"/></svg>
+              </button>
+              <div class="select-panel" id="versionPanel" role="listbox" hidden></div>
+            </div>
           </div>
           <div class="controls">
             <button class="icon-btn" id="update" type="button" hidden aria-label="更新" title="更新">
@@ -405,7 +509,145 @@
     </div>
   </main>
   <script>
-    const versionEl = document.getElementById('version')
+    // ---- 版本下拉（自绘，替代原生 select）----
+    const versionRootEl = document.getElementById('versionPicker')
+    const versionTriggerEl = document.getElementById('versionTrigger')
+    const versionValueEl = document.getElementById('versionValue')
+    const versionPanelEl = document.getElementById('versionPanel')
+    let versionOptions = []      // [{ value, text, badge?, more? }]
+    let versionValue = ''
+    let versionDisabled = false
+    let versionOpen = false
+    let versionActive = -1
+    let versionOnChange = () => {}
+
+    function versionBadgeText(option) {
+      return option?.badge ? `${option.text} · ${option.badge}` : option?.text || ''
+    }
+
+    function paintVersionTrigger() {
+      const hit = versionOptions.find((option) => option.value === versionValue)
+      versionValueEl.textContent = versionBadgeText(hit) || '暂无版本'
+      versionTriggerEl.disabled = versionDisabled
+      versionTriggerEl.setAttribute('aria-expanded', String(versionOpen))
+      versionRootEl.classList.toggle('open', versionOpen)
+    }
+
+    function paintVersionPanel() {
+      versionPanelEl.innerHTML = versionOptions.map((option, index) => {
+        const cls = ['select-option']
+        if (option.value === versionValue) cls.push('selected')
+        if (option.more) cls.push('more')
+        if (index === versionActive) cls.push('active')
+        return `<div class="${cls.join(' ')}" data-index="${index}" role="option" aria-selected="${option.value === versionValue}">
+          <span class="opt-name">${escapeHtml(option.text)}</span>
+          ${option.badge ? `<span class="opt-badge">${escapeHtml(option.badge)}</span>` : ''}
+        </div>`
+      }).join('')
+      versionPanelEl.querySelectorAll('.select-option').forEach((el) => {
+        const index = Number(el.dataset.index)
+        el.addEventListener('click', () => chooseVersionOption(index))
+        el.addEventListener('mouseenter', () => {
+          versionActive = index
+          paintVersionActive()
+        })
+      })
+    }
+
+    function paintVersionActive() {
+      versionPanelEl.querySelectorAll('.select-option').forEach((el, index) => {
+        el.classList.toggle('active', index === versionActive)
+      })
+    }
+
+    function scrollVersionActive() {
+      versionPanelEl.querySelector('.select-option.active')?.scrollIntoView({ block: 'nearest' })
+    }
+
+    function openVersionPanel() {
+      if (versionDisabled || !versionOptions.length) return
+      versionOpen = true
+      versionActive = Math.max(0, versionOptions.findIndex((option) => option.value === versionValue))
+      paintVersionPanel()
+      paintVersionTrigger()
+      versionPanelEl.hidden = false
+      scrollVersionActive()
+      versionTriggerEl.focus()
+    }
+
+    function closeVersionPanel() {
+      if (!versionOpen) return
+      versionOpen = false
+      versionPanelEl.hidden = true
+      paintVersionTrigger()
+    }
+
+    function chooseVersionOption(index) {
+      const option = versionOptions[index]
+      if (!option) return
+      if (option.more) {
+        // 展开/收起：面板要保持打开，render() 会重建列表
+        versionOnChange(option.value, true)
+        return
+      }
+      versionValue = option.value
+      versionOnChange(option.value, false)
+      closeVersionPanel()
+    }
+
+    function moveVersionActive(delta) {
+      if (!versionOptions.length) return
+      versionActive = Math.min(versionOptions.length - 1, Math.max(0, versionActive + delta))
+      paintVersionActive()
+      scrollVersionActive()
+    }
+
+    versionTriggerEl.addEventListener('click', () => {
+      if (versionOpen) closeVersionPanel()
+      else openVersionPanel()
+    })
+    // 面板打开时焦点在触发器上，键盘事件统一在这里处理（也兜住从面板里冒泡上来的）
+    versionRootEl.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        if (!versionOpen) return
+        event.preventDefault()
+        closeVersionPanel()
+        versionTriggerEl.focus()
+        return
+      }
+      if (event.key === 'Tab') {
+        closeVersionPanel()
+        return
+      }
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault()
+        if (!versionOpen) { openVersionPanel(); return }
+        moveVersionActive(event.key === 'ArrowDown' ? 1 : -1)
+        return
+      }
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        if (!versionOpen) openVersionPanel()
+        else chooseVersionOption(versionActive)
+        return
+      }
+      if (event.key === 'Home' && versionOpen) {
+        event.preventDefault()
+        versionActive = 0
+        paintVersionActive()
+        scrollVersionActive()
+      }
+      if (event.key === 'End' && versionOpen) {
+        event.preventDefault()
+        versionActive = versionOptions.length - 1
+        paintVersionActive()
+        scrollVersionActive()
+      }
+    })
+    document.addEventListener('click', (event) => {
+      if (!versionRootEl.contains(event.target)) closeVersionPanel()
+    })
+
     const hintEl = document.getElementById('hint')
     const mainEl = document.getElementById('main')
     const restartEl = document.getElementById('restart')
@@ -420,6 +662,9 @@
     let installProgress = null
     let barPhase = ''
     let barMaxPct = 0
+    // 下拉默认只列已装 + 最新 + 最近几个版本，其余折起来（原生下拉太长会顶出屏幕）
+    const RECENT_REMOTE_LIMIT = 5
+    let showAllVersions = false
     const fromLauncher = new URLSearchParams(location.search).has('launch')
     let launchFollowed = false
     let launchRequested = false
@@ -521,10 +766,30 @@
       return row ? { version: row.version, status: row.status, url: row.url } : null
     }
 
-    function versionList() {
+    function allVersionList() {
       const remoteVersions = versionNames(remote.versions)
       const extra = installedList().filter((version) => !remoteVersions.includes(version))
       return [...extra, ...remoteVersions]
+    }
+
+    /** 折叠后的可见版本：已装、最新、当前选中永远保留，其余远程版本只留最近几个。 */
+    function visibleVersionList(all) {
+      if (showAllVersions) return all
+      const keep = new Set(installedList())
+      const latest = latestRemoteVersion()
+      if (latest) keep.add(latest)
+      if (userPicked && picked) keep.add(picked)
+      const shown = []
+      let slots = RECENT_REMOTE_LIMIT
+      for (const version of all) {
+        if (keep.has(version)) { shown.push(version); continue }
+        if (slots > 0) { shown.push(version); slots -= 1 }
+      }
+      return shown
+    }
+
+    function versionList() {
+      return visibleVersionList(allVersionList())
     }
 
     function latestRemoteVersion() {
@@ -545,21 +810,32 @@
     }
 
     function selected() {
-      return versionEl.value || preferredPick()
+      return versionValue || preferredPick()
     }
 
     function render() {
       const have = new Set(installedList())
-      const versions = versionList()
+      const allVersions = allVersionList()
+      const versions = visibleVersionList(allVersions)
+      const hidden = allVersions.length - versions.length
       const current = preferredPick() || versions[0] || ''
       const latest = latestRemoteVersion()
-      versionEl.innerHTML = versions.map((version) => {
-        const mark = have.has(version) ? ' · 已装' : version === latest ? ' · 最新' : ''
-        return `<option value="${version}">${version}${mark}</option>`
-      }).join('') || '<option value="">暂无版本</option>'
-      if ([...versionEl.options].some((option) => option.value === current)) versionEl.value = current
+      const nextOptions = versions.map((version) => ({
+        value: version,
+        text: version,
+        badge: have.has(version) ? '已装' : version === latest ? '最新' : '',
+      }))
+      if (hidden > 0) nextOptions.push({ value: '__more__', text: `更多版本…（还有 ${hidden} 个）`, more: true })
+      else if (showAllVersions && allVersions.length > RECENT_REMOTE_LIMIT + 2) {
+        nextOptions.push({ value: '__less__', text: '收起旧版本', more: true })
+      }
+      versionOptions = nextOptions
+      if (nextOptions.some((option) => option.value === current)) versionValue = current
+      else if (!nextOptions.some((option) => option.value === versionValue)) versionValue = nextOptions[0]?.value || ''
+      paintVersionTrigger()
+      if (versionOpen) paintVersionPanel()
 
-      const version = versionEl.value
+      const version = versionValue
       const running = runningInfo()
       const thisRun = Boolean(running && running.version === version)
       const live = Boolean(running && (running.status === 'running' || running.status === 'starting'))
@@ -579,7 +855,9 @@
       removeEl.hidden = !have.has(version) || live || (loading && !uninstalling)
       removeEl.disabled = loading
       removeEl.classList.toggle('loading', uninstalling)
-      versionEl.disabled = loading || live
+      versionDisabled = loading || live
+      if (versionDisabled) closeVersionPanel()
+      paintVersionTrigger()
       mainEl.hidden = updating || uninstalling
       mainEl.disabled = loading || !version
       mainEl.classList.toggle('loading', loading && !updating && !uninstalling)
@@ -640,7 +918,25 @@
       setMainAction('play', '安装并启动')
     }
 
-    versionEl.onchange = () => { picked = versionEl.value; userPicked = true; render() }
+    versionOnChange = (value, keepOpen) => {
+      if (value === '__more__' || value === '__less__') {
+        showAllVersions = value === '__more__'
+        render()
+        // 展开/收起只是改变列表长度，面板继续开着，光标停在切换项上
+        if (keepOpen || versionOpen) {
+          openVersionPanel()
+          const anchor = value === '__more__' ? '__less__' : '__more__'
+          const found = versionOptions.findIndex((option) => option.value === anchor)
+          versionActive = found >= 0 ? found : versionOptions.length - 1
+          paintVersionActive()
+          scrollVersionActive()
+        }
+        return
+      }
+      picked = value
+      userPicked = true
+      render()
+    }
 
     async function startVersion(version) {
       try {

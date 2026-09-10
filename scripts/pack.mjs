@@ -83,7 +83,6 @@ async function assemble() {
     'server.js',
     'registry.js',
     'settings.js',
-    'repair.js',
     'plugins.js',
     'plugin-tool.js',
     'stdio-unblock.cjs',
