@@ -4,7 +4,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { cmpVer, installSpec, listPackage, parseVer } from './registry.js'
 import pkg from './package.json' with { type: 'json' }
 import {
@@ -353,10 +353,16 @@ function bootArgs() {
   return [PROFILE_NAME, '--host', '127.0.0.1', '--port', '0', '--no-open']
 }
 
+/** 启动加速钩子：把 dsh 合成客户端 bundle 时的两处慢实现换成等价快实现（约省 2-3 秒）。 */
+const PERF_HOOK = join(ROOT, 'perf', 'register.mjs')
+
 function spawnDsh(version, extra) {
   const home = homeDir()
   const bin = binPath(version)
-  return spawn(process.execPath, [bin, ...extra], {
+  const args = existsSync(PERF_HOOK)
+    ? ['--import', pathToFileURL(PERF_HOOK).href, bin, ...extra]
+    : [bin, ...extra]
+  return spawn(process.execPath, args, {
     cwd: home,
     env: dshEnv(version),
     stdio: ['ignore', 'pipe', 'pipe'],
