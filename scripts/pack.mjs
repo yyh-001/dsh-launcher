@@ -78,7 +78,17 @@ async function assemble() {
   await mkdir(join(OUT, 'public'), { recursive: true })
   await mkdir(join(OUT, 'assets'), { recursive: true })
   await mkdir(join(OUT, 'traybin'), { recursive: true })
-  for (const file of ['start.js', 'server.js', 'registry.js', 'settings.js', 'stdio-unblock.cjs', 'package.json']) {
+  for (const file of [
+    'start.js',
+    'server.js',
+    'registry.js',
+    'settings.js',
+    'repair.js',
+    'plugins.js',
+    'plugin-tool.js',
+    'stdio-unblock.cjs',
+    'package.json',
+  ]) {
     await copyFile(join(ROOT, file), join(OUT, file))
   }
   await cp(join(ROOT, 'public'), join(OUT, 'public'), { recursive: true })

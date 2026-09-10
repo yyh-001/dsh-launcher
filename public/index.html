@@ -56,7 +56,7 @@
     main { min-height: 0; }
     .page { display: none; height: 100%; }
     .page.active { display: flex; }
-    #page-home, #page-settings { align-items: center; justify-content: center; padding: 24px; }
+    #page-home, #page-plugins, #page-settings { align-items: center; justify-content: center; padding: 24px; }
     .card {
       width: min(640px, 100%);
       background: var(--card);
@@ -65,6 +65,13 @@
       padding: 24px;
     }
     .card.settings { width: min(560px, 100%); }
+    .card.plugins {
+      width: min(720px, 100%);
+      max-height: 100%;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
     .card.settings .toggle:first-child { margin-top: 0; }
     .home-bar {
       display: flex;
@@ -246,6 +253,68 @@
       font: 12px/1.45 ui-monospace, Consolas, monospace;
       white-space: pre-wrap;
     }
+    .plugin-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    .plugin-title { color: var(--text); font-size: 15px; font-weight: 650; letter-spacing: 0.02em; }
+    .plugin-sub { color: var(--muted); font-size: 12px; margin-top: 3px; }
+    .ghost {
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-size: 12px;
+      padding: 5px 12px;
+      border-radius: 999px;
+      cursor: pointer;
+      flex: 0 0 auto;
+    }
+    .ghost:hover { color: var(--text); border-color: #3d3d3d; }
+    .ghost:disabled { opacity: 0.5; cursor: default; }
+    .plugin-list {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      /* 给滚动条留位置，开关不会被压住 */
+      padding-right: 10px;
+      margin-right: -10px;
+    }
+    .plugin-row {
+      margin: 0;
+      padding: 13px 8px;
+      border-bottom: 1px solid var(--line);
+      align-items: center;
+      gap: 14px;
+      border-radius: 10px;
+      transition: background 0.12s ease;
+    }
+    .plugin-row:hover { background: #161616; }
+    .plugin-row:last-child { border-bottom: 0; }
+    .plugin-row.off .plugin-name { color: var(--muted); font-weight: 500; }
+    .plugin-row.off .plugin-meta { opacity: 0.75; }
+    .plugin-row input:disabled { opacity: 0.4; cursor: not-allowed; }
+    .plugin-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+    .plugin-name { color: var(--text); font-weight: 600; font-size: 14px; letter-spacing: 0; overflow-wrap: anywhere; }
+    .plugin-meta { color: var(--muted); font-size: 12px; letter-spacing: 0; overflow-wrap: anywhere; }
+    .plugin-empty { color: var(--muted); font-size: 13px; padding: 10px 8px; }
+    /* 深色滚动条，避免默认亮色滚动条糊在开关上 */
+    .plugin-list, #log { scrollbar-width: thin; scrollbar-color: #3a3a3a transparent; }
+    .plugin-list::-webkit-scrollbar, #log::-webkit-scrollbar { width: 10px; height: 10px; }
+    .plugin-list::-webkit-scrollbar-track, #log::-webkit-scrollbar-track { background: transparent; }
+    .plugin-list::-webkit-scrollbar-thumb, #log::-webkit-scrollbar-thumb {
+      background: #3a3a3a;
+      border-radius: 999px;
+      border: 3px solid transparent;
+      background-clip: content-box;
+    }
+    .plugin-list::-webkit-scrollbar-thumb:hover, #log::-webkit-scrollbar-thumb:hover {
+      background: #525252;
+      background-clip: content-box;
+    }
   </style>
 </head>
 <body>
@@ -257,6 +326,7 @@
     </div>
     <nav>
       <button class="active" data-tab="home">控制</button>
+      <button data-tab="plugins">插件</button>
       <button data-tab="log">终端</button>
       <button data-tab="settings">设置</button>
     </nav>
@@ -307,6 +377,19 @@
         </div>
       </div>
     </div>
+    <div id="page-plugins" class="page">
+      <div class="card plugins">
+        <div class="plugin-head">
+          <div>
+            <div class="plugin-title">插件</div>
+            <div class="plugin-sub" id="pluginSub">web profile</div>
+          </div>
+          <button class="ghost" id="pluginRefresh" type="button">刷新</button>
+        </div>
+        <div class="plugin-list" id="pluginList"></div>
+        <p class="hint" id="pluginHint"></p>
+      </div>
+    </div>
     <div id="page-log" class="page">
       <div class="logbar"><button type="button" id="clear">清空</button></div>
       <pre id="log"></pre>
@@ -315,6 +398,7 @@
       <div class="card settings">
         <label class="toggle"><span>开机自启</span><input id="autoStart" type="checkbox" /></label>
         <label class="toggle"><span>自动安装插件市场</span><input id="seedMarket" type="checkbox" /></label>
+        <label class="toggle"><span>启动失败自动禁用问题插件（兼容模式）</span><input id="autoDisable" type="checkbox" /></label>
         <button class="primary" id="saveSettings" type="button" style="margin-top: 22px">保存</button>
         <p class="hint" id="settingsHint"></p>
       </div>
@@ -355,6 +439,7 @@
         document.querySelectorAll('nav [data-tab]').forEach((item) => item.classList.toggle('active', item === button))
         document.querySelectorAll('.page').forEach((page) => page.classList.toggle('active', page.id === `page-${button.dataset.tab}`))
         if (button.dataset.tab === 'settings') loadSettings()
+        if (button.dataset.tab === 'plugins') loadPlugins()
       }
     })
 
@@ -527,7 +612,15 @@
         return
       }
       if (thisRun && running.status === 'running') {
-        hintEl.innerHTML = `运行中 · <a href="${running.url}" target="_blank" rel="noreferrer">${running.url}</a>`
+        const mode = '运行中'
+        const fixed = stateAutoFix()
+        const note = fixed ? `<br>启动时自动禁用了：${escapeHtml(fixed)}（插件页可恢复）` : ''
+        const health = state.health && state.health.url === running.url ? state.health : null
+        // 只在自检发现问题时提示；一切正常就不打扰
+        const healthNote = health?.failed?.length
+          ? `<br>⚠ 页面自检：${health.failed.length}/${health.total} 个插件包加载失败`
+          : ''
+        hintEl.innerHTML = `${mode} · <a href="${running.url}" target="_blank" rel="noreferrer">${running.url}</a>${note}${healthNote}`
         setMainAction('stop', '停止')
         return
       }
@@ -714,6 +807,8 @@
         installed,
         versions: data.versions,
         running,
+        autoFix: data.autoFix ?? null,
+        health: data.health ?? null,
         loaded: true,
       }
       if (data.progress) installProgress = data.progress
@@ -807,12 +902,14 @@
 
     const autoStartEl = document.getElementById('autoStart')
     const seedMarketEl = document.getElementById('seedMarket')
+    const autoDisableEl = document.getElementById('autoDisable')
     const settingsHint = document.getElementById('settingsHint')
     const saveSettingsEl = document.getElementById('saveSettings')
 
     function fillSettings(data) {
       if ('autoStart' in data) autoStartEl.checked = Boolean(data.autoStart)
       if ('seedMarket' in data) seedMarketEl.checked = data.seedMarket !== false
+      if ('autoDisablePlugins' in data) autoDisableEl.checked = data.autoDisablePlugins !== false
     }
 
     function loadSettings() {
@@ -828,6 +925,7 @@
         const data = await post('/api/settings', {
           autoStart: autoStartEl.checked,
           seedMarket: seedMarketEl.checked,
+          autoDisablePlugins: autoDisableEl.checked,
         })
         fillSettings(data)
         settingsHint.textContent = '已保存。'
@@ -836,6 +934,84 @@
       } finally {
         saveSettingsEl.disabled = false
       }
+    }
+
+    const pluginListEl = document.getElementById('pluginList')
+    const pluginHintEl = document.getElementById('pluginHint')
+    const pluginSubEl = document.getElementById('pluginSub')
+    const pluginRefreshEl = document.getElementById('pluginRefresh')
+    let pluginsLoaded = false
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+      }[ch]))
+    }
+
+    function stateAutoFix() {
+      const names = (state.autoFix?.plugins || []).map((item) => item.name || item.id).filter(Boolean)
+      return names.join('、')
+    }
+
+    function renderPlugins(data) {
+      const list = Array.isArray(data?.plugins) ? data.plugins : []
+      const on = list.filter((plugin) => plugin.enabled).length
+      if (pluginSubEl) {
+        pluginSubEl.textContent = list.length
+          ? `${data.profile || 'web'} profile · 共 ${list.length} 个 · ${on} 个启用`
+          : `${data.profile || 'web'} profile`
+      }
+      if (!list.length) {
+        pluginListEl.innerHTML = '<div class="plugin-empty">这个 profile 里没有已安装的插件。</div>'
+        return
+      }
+      pluginListEl.innerHTML = list.map((plugin) => {
+        const meta = [
+          plugin.version ? `v${plugin.version}` : '',
+          plugin.ids?.length ? `行 ${plugin.ids.join(', ')}` : '',
+          plugin.enabled ? '' : '已禁用',
+          plugin.toggleable ? '' : plugin.reason,
+        ].filter(Boolean).join(' · ')
+        return `<label class="toggle plugin-row${plugin.enabled ? '' : ' off'}" title="${escapeHtml(plugin.reason || plugin.name)}">
+          <span class="plugin-main">
+            <span class="plugin-name">${escapeHtml(plugin.name)}</span>
+            <span class="plugin-meta">${escapeHtml(meta)}</span>
+          </span>
+          <input type="checkbox" data-plugin="${escapeHtml(plugin.name)}" ${plugin.enabled ? 'checked' : ''} ${plugin.toggleable ? '' : 'disabled'} />
+        </label>`
+      }).join('')
+      pluginListEl.querySelectorAll('input[data-plugin]').forEach((el) => {
+        el.onchange = () => { void togglePlugin(el.dataset.plugin, el.checked) }
+      })
+    }
+
+    async function togglePlugin(name, enabled) {
+      pluginHintEl.textContent = `${enabled ? '正在启用' : '正在禁用'} ${name}…`
+      try {
+        const data = await post('/api/plugins/toggle', { name, enabled })
+        renderPlugins(data)
+        const changed = data.changed ? '' : '（无变化）'
+        pluginHintEl.textContent = `${name} 已${enabled ? '启用' : '禁用'}${changed}。`
+      } catch (error) {
+        pluginHintEl.textContent = error.message
+        loadPlugins()
+      }
+    }
+
+    function loadPlugins() {
+      return getJson('/api/plugins').then((data) => {
+        renderPlugins(data)
+        const names = (data.autoFix?.plugins || []).map((item) => item.name || item.id).filter(Boolean)
+        if (names.length) pluginHintEl.textContent = `上次启动自动禁用了：${names.join('、')}（认为没问题可在上面重新打开）。`
+        else if (!pluginsLoaded) pluginHintEl.textContent = ''
+        pluginsLoaded = true
+      }).catch((error) => { pluginHintEl.textContent = error.message })
+    }
+
+    pluginRefreshEl.onclick = async () => {
+      pluginRefreshEl.disabled = true
+      await loadPlugins()
+      pluginRefreshEl.disabled = false
     }
 
     loadSettings()
