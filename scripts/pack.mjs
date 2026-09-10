@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process'
 import { createWriteStream, existsSync, readFileSync, rmSync } from 'node:fs'
-import { copyFile, cp, mkdir } from 'node:fs/promises'
+import { copyFile, cp, mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { fileURLToPath } from 'node:url'
@@ -8,6 +8,8 @@ import { fileURLToPath } from 'node:url'
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const PKG = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
 const NODE_VERSION = process.env.DSH_NODE_VERSION || '22.19.0'
+// dsh 的 profile 用 pnpm 8（lockfile 6.0），便携目录带同主版本
+const PNPM_VERSION = process.env.DSH_PNPM_VERSION || '8.15.9'
 const DIST = `node-v${NODE_VERSION}-win-x64`
 const ZIP = `${DIST}.zip`
 const VENDOR = join(ROOT, 'vendor')
@@ -67,6 +69,49 @@ async function copyNodeRuntime() {
   if (existsSync(corepack)) {
     await cp(corepack, join(OUT, 'node', 'node_modules', 'corepack'), { recursive: true })
   }
+  await copyPnpm()
+}
+
+/**
+ * `dsh plugin` 是 pnpm 的透传器，PATH 上没有 pnpm 就完全装不了插件（含开机预装
+ * dshmarket）。机器上有没有全局 pnpm 全看运气，所以便携目录自带一个，启动器再
+ * 把它加进子进程 PATH。
+ */
+async function copyPnpm() {
+  const target = join(OUT, 'node', 'node_modules', 'pnpm')
+  if (existsSync(join(target, 'bin', 'pnpm.cjs'))) return
+  const staging = join(VENDOR, 'pnpm')
+  if (!existsSync(join(staging, 'node_modules', 'pnpm', 'bin', 'pnpm.cjs'))) {
+    console.log(`下载 pnpm@${PNPM_VERSION}`)
+    await mkdir(staging, { recursive: true })
+    await writeFile(join(staging, 'package.json'), JSON.stringify({
+      name: 'pnpm-bootstrap',
+      private: true,
+      dependencies: { pnpm: PNPM_VERSION },
+    }, null, 2))
+    run(process.execPath, [join(EXTRACTED, 'node_modules', 'npm', 'bin', 'npm-cli.js'), 'install',
+      '--registry=https://registry.npmmirror.com', '--no-audit', '--no-fund'], staging)
+  }
+  await cp(join(staging, 'node_modules', 'pnpm'), target, { recursive: true })
+  await writeFile(join(OUT, 'node', 'pnpm.cmd'), [
+    '@ECHO off',
+    'SETLOCAL',
+    'SET "PNPM_JS=%~dp0node_modules\\pnpm\\bin\\pnpm.cjs"',
+    '"%~dp0node.exe" "%PNPM_JS%" %*',
+    '',
+  ].join('\r\n'))
+  await writeFile(join(OUT, 'node', 'pnpm'), [
+    '#!/bin/sh',
+    'exec "$(dirname "$0")/node.exe" "$(dirname "$0")/node_modules/pnpm/bin/pnpm.cjs" "$@"',
+    '',
+  ].join('\n'))
+  const pnpx = 'pnpx'
+  await writeFile(join(OUT, 'node', `${pnpx}.cmd`), [
+    '@ECHO off',
+    'SETLOCAL',
+    '"%~dp0node.exe" "%~dp0node_modules\\pnpm\\bin\\pnpx.cjs" %*',
+    '',
+  ].join('\r\n'))
 }
 
 async function buildLauncher() {

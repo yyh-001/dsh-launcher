@@ -3,7 +3,7 @@ import { createServer } from 'node:http'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { delimiter, dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { cmpVer, installSpec, listPackage, parseVer } from './registry.js'
 import pkg from './package.json' with { type: 'json' }
@@ -340,7 +340,22 @@ function dshEnv(version) {
     // 浏览器里堆积的 cookie 会顶爆默认 16KB 的请求头上限（HTTP 431），一并放宽
     NODE_OPTIONS: [process.env.NODE_OPTIONS, '--max-http-header-size=131072'].filter(Boolean).join(' '),
     npm_config_ignore_workspace_root_check: 'true',
+    PATH: withBundledRuntime(process.env.PATH || ''),
   }
+}
+
+/**
+ * 把便携运行时的目录放到 PATH 最前面。
+ *
+ * `dsh plugin` 是 pnpm 的透传器，装插件（含首次预装 dshmarket）必须有 pnpm；机器上
+ * 有没有全局 pnpm 全看运气，所以安装包自带一份。另外插件里常带原生模块和 postinstall
+ * 构建脚本，也指望能就地找到 node/npm。
+ */
+function withBundledRuntime(pathValue) {
+  const dir = join(ROOT, 'node')
+  if (!existsSync(join(dir, 'node.exe'))) return pathValue
+  const parts = String(pathValue).split(delimiter).filter(Boolean)
+  return [dir, ...parts.filter((item) => item !== dir)].join(delimiter)
 }
 
 /** 当前 profile 目录。 */
