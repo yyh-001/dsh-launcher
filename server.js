@@ -12,6 +12,7 @@ import {
   listPlugins,
   ownerOfRow,
   parseFailedRows,
+  parseUnresolvedBundles,
   setPluginEnabled,
 } from './plugins.js'
 import {
@@ -468,6 +469,24 @@ async function installedPlugins() {
   }
 }
 
+/** 跑一条 `dsh plugin …`（透传给 pnpm），输出进日志。 */
+function runPluginCommand(ver, args, label) {
+  return new Promise((resolve, reject) => {
+    const child = spawnDsh(ver, ['plugin', '--profile', PROFILE_NAME, ...args])
+    child.stdout.on('data', (buf) => {
+      for (const line of buf.toString('utf8').split(/\r?\n/)) pushLog(`[plugin] ${line}`)
+    })
+    child.stderr.on('data', (buf) => {
+      for (const line of buf.toString('utf8').split(/\r?\n/)) pushLog(`[plugin] ${line}`)
+    })
+    child.on('error', reject)
+    child.on('close', (code) => {
+      if (code === 0) resolve()
+      else reject(new Error(`${label} 退出码 ${code}`))
+    })
+  })
+}
+
 async function addPlugin(version, spec) {
   const ver = safeVersion(version)
   const pkg = safeSpec(spec)
@@ -479,21 +498,45 @@ async function addPlugin(version, spec) {
   await ensureProfileNpmrc()
   pushLog(`安装插件 ${pkg} 到 web profile`)
   try {
-    await new Promise((resolve, reject) => {
-      const child = spawnDsh(ver, ['plugin', '--profile', 'web', 'add', '-w', pkg])
-      child.stdout.on('data', (buf) => {
-        for (const line of buf.toString('utf8').split(/\r?\n/)) pushLog(`[plugin] ${line}`)
-      })
-      child.stderr.on('data', (buf) => {
-        for (const line of buf.toString('utf8').split(/\r?\n/)) pushLog(`[plugin] ${line}`)
-      })
-      child.on('error', reject)
-      child.on('close', (code) => {
-        if (code === 0) resolve()
-        else reject(new Error(`dsh plugin add ${pkg} 退出码 ${code}`))
-      })
-    })
+    try {
+      await runPluginCommand(ver, ['add', '-w', pkg], `dsh plugin add ${pkg}`)
+    } catch (error) {
+      // 插件声明的 @deepseek-ai/* peer 多为运行时注入、registry 上只有 prerelease，
+      // pnpm 自动装 peer 会 404；关掉它重试一次（与插件市场同款做法）
+      pushLog(`${error instanceof Error ? error.message : error}；改用不自动装 peer 重试`)
+      await runPluginCommand(ver, ['add', '-w', pkg, '--config.auto-install-peers=false'], `dsh plugin add ${pkg}`)
+    }
     pushLog(`${pkg} 已在 web profile`)
+  } finally {
+    pluginBusy = false
+  }
+}
+
+/**
+ * profile 依赖自愈：dsh 报 `cannot resolve profile bundle "x"` 说明 profile 的
+ * node_modules 里那个包不在（没装成，或 pnpm 中途被打断只留了断链），按 dsh 的
+ * 提示重装 profile 依赖即可。
+ * @returns 是否值得重试启动
+ */
+async function repairProfileDeps(version, error) {
+  const failure = error?.failure || lastFailure
+  const bundles = parseUnresolvedBundles(`${failure?.message || ''}\n${(failure?.tail || []).join('\n')}`)
+  if (!bundles.length) return false
+  if (pluginBusy) {
+    pushLog(`[兼容] profile 里解析不到 ${bundles.join('、')}，但正在装插件，跳过依赖重建`)
+    return false
+  }
+  pushLog(`[兼容] profile 里解析不到 ${bundles.join('、')}，重建 profile 依赖（dsh plugin install）…`)
+  pluginBusy = true
+  try {
+    await mkdir(homeDir(), { recursive: true })
+    await ensureProfileNpmrc()
+    await runPluginCommand(version, ['install', '--config.auto-install-peers=false'], 'dsh plugin install')
+    pushLog('[兼容] profile 依赖已重建，重试启动…')
+    return true
+  } catch (error2) {
+    pushLog(`[兼容] 重建 profile 依赖失败：${error2 instanceof Error ? error2.message : error2}`)
+    return false
   } finally {
     pluginBusy = false
   }
@@ -769,10 +812,14 @@ async function autoDisableFailedPlugins(error, already) {
   return false
 }
 
-/** 启动失败 → 按错误自动禁用问题插件（兼容模式）→ 重试，直到成功或无法再修。 */
+/**
+ * 启动失败 → 自动修复 → 重试（兼容模式），直到成功或无法再修。
+ * 先试禁用出问题的插件行，再试重建 profile 依赖（两者各只做一次，避免打转）。
+ */
 async function startWithRepair(version) {
   lastAutoFix = null
   const autoDisabled = new Set()
+  let depsRepaired = false
   let lastError
   for (;;) {
     try {
@@ -781,6 +828,10 @@ async function startWithRepair(version) {
       lastError = error
       pushLog(`启动失败：${error instanceof Error ? error.message : error}`)
       if (autoDisabled.size < MAX_AUTO_DISABLE && await autoDisableFailedPlugins(error, autoDisabled)) {
+        continue
+      }
+      if (!depsRepaired && await repairProfileDeps(version, error)) {
+        depsRepaired = true
         continue
       }
       break

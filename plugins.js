@@ -22,6 +22,9 @@ const MARKET_ROW_RE = /^(?:mkt-|client-|include:)/
 /** 启动失败输出里点名的失败插件行：failed to import loader entry <行> (<包>)。 */
 const FAILED_ROW_RE = /failed to import loader entry\s+(\S+)\s+\(([^)\s]+)\)/g
 
+/** 启动失败输出里解析不到的 profile bundle（依赖缺失或断链，可重建修复）。 */
+const UNRESOLVED_BUNDLE_RE = /cannot resolve profile bundle\s+"([^"]+)"/g
+
 export function profileDirOf(dshHome, profile = 'web') {
   return join(dshHome, 'profiles', profile)
 }
@@ -275,6 +278,23 @@ export function parseFailedRows(text) {
     if (seen.has(key)) continue
     seen.add(key)
     found.push({ id: match[1], pkg: match[2] })
+  }
+  return found
+}
+
+/**
+ * 从启动失败输出里解析解析不到的 profile bundle（去重）。
+ *
+ * 这条错误说明 profile 的 node_modules 里那个包不在（没装、或 pnpm 中途被打断
+ * 只留了断链），重装 profile 依赖即可修复——dsh 的报错信息也是这么建议的。
+ */
+export function parseUnresolvedBundles(text) {
+  const found = []
+  const seen = new Set()
+  for (const match of String(text ?? '').matchAll(UNRESOLVED_BUNDLE_RE)) {
+    if (seen.has(match[1])) continue
+    seen.add(match[1])
+    found.push(match[1])
   }
   return found
 }
